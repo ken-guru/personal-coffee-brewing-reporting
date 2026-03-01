@@ -80,7 +80,7 @@ export default async function handler(req: VReq, res: VRes) {
       },
     };
 
-    const access = (process.env.BLOB_ACCESS === 'private' ? 'private' : 'public') as 'public' | 'private';
+    const access: 'public' | 'private' = process.env.BLOB_ACCESS === 'private' ? 'private' : 'public';
 
     await put(`brew-${shareId}.json`, JSON.stringify(sharedBrew), {
       access,

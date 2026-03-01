@@ -15,3 +15,12 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// Default fetch mock: returns a failed response to prevent real network calls in tests.
+// Individual tests can override this mock as needed.
+globalThis.fetch = vi.fn().mockResolvedValue({
+  ok: false,
+  status: 503,
+  json: () => Promise.resolve({}),
+  clone: function () { return this; },
+});

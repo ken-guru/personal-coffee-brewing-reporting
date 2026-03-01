@@ -34,7 +34,9 @@ export default async function handler(req: VReq, res: VRes) {
       return;
     }
 
-    const fetchRes = await fetch(blob.url);
+    const fetchRes = await fetch(blob.url, {
+      headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    });
     if (!fetchRes.ok) {
       res.status(404).json({ error: 'Brew not found' });
       return;

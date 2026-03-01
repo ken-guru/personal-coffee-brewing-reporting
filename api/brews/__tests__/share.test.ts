@@ -4,10 +4,14 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as blobModule from '@vercel/blob';
 
 // Mock @vercel/blob before importing the handler
-vi.mock('@vercel/blob', () => ({
-  put: vi.fn(),
-  list: vi.fn(),
-}));
+vi.mock('@vercel/blob', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@vercel/blob')>();
+  return {
+    ...actual,
+    put: vi.fn(),
+    list: vi.fn(),
+  };
+});
 
 const mockPut = blobModule.put as MockedFunction<typeof blobModule.put>;
 
@@ -189,5 +193,58 @@ describe('POST /api/brews/share', () => {
     await handler(req, res as unknown as Parameters<typeof handler>[1]);
     expect(lastStatus()).toBe(500);
     expect((lastBody() as { error: string }).error).toMatch(/Failed to share brew/);
+  });
+
+  it('returns 403 when blob storage throws BlobAccessError', async () => {
+    mockPut.mockRejectedValueOnce(new blobModule.BlobAccessError());
+    const req = makeReq({
+      body: validBrewBody,
+      headers: { host: 'myapp.vercel.app' },
+    });
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(403);
+    expect((lastBody() as { error: string }).error).toMatch(/access denied/i);
+  });
+
+  it('returns 503 when blob store is not found', async () => {
+    mockPut.mockRejectedValueOnce(new blobModule.BlobStoreNotFoundError());
+    const req = makeReq({
+      body: validBrewBody,
+      headers: { host: 'myapp.vercel.app' },
+    });
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(503);
+    expect((lastBody() as { error: string }).error).toMatch(/not found/i);
+  });
+
+  it('uses private access when BLOB_ACCESS is set to private', async () => {
+    process.env.BLOB_ACCESS = 'private';
+    const req = makeReq({
+      body: validBrewBody,
+      headers: { host: 'myapp.vercel.app' },
+    });
+    const { res, lastStatus } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(201);
+
+    const putOptions = mockPut.mock.calls[0][2] as { access: string };
+    expect(putOptions.access).toBe('private');
+    delete process.env.BLOB_ACCESS;
+  });
+
+  it('defaults to public access when BLOB_ACCESS is not set', async () => {
+    delete process.env.BLOB_ACCESS;
+    const req = makeReq({
+      body: validBrewBody,
+      headers: { host: 'myapp.vercel.app' },
+    });
+    const { res, lastStatus } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(201);
+
+    const putOptions = mockPut.mock.calls[0][2] as { access: string };
+    expect(putOptions.access).toBe('public');
   });
 });

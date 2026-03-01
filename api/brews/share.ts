@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { put, BlobAccessError, BlobStoreNotFoundError, BlobStoreSuspendedError, BlobServiceNotAvailable, BlobServiceRateLimited } from '@vercel/blob';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 // Minimal helper types for Vercel Functions (no @vercel/node dependency needed)
@@ -80,8 +80,11 @@ export default async function handler(req: VReq, res: VRes) {
       },
     };
 
+    const access = (process.env.BLOB_ACCESS === 'private' ? 'private' : 'public') as 'public' | 'private';
+
     await put(`brew-${shareId}.json`, JSON.stringify(sharedBrew), {
-      access: 'public',
+      access,
+      contentType: 'application/json',
       addRandomSuffix: false,
       allowOverwrite: false,
     });
@@ -94,6 +97,19 @@ export default async function handler(req: VReq, res: VRes) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('Error sharing brew:', message);
-    res.status(500).json({ error: 'Failed to share brew' });
+
+    if (err instanceof BlobAccessError) {
+      res.status(403).json({ error: 'Blob storage access denied. Check that BLOB_READ_WRITE_TOKEN is valid and the store access level matches (set BLOB_ACCESS=private if using a private store).' });
+    } else if (err instanceof BlobStoreNotFoundError) {
+      res.status(503).json({ error: 'Blob store not found. Ensure the blob store is properly linked to this project.' });
+    } else if (err instanceof BlobStoreSuspendedError) {
+      res.status(503).json({ error: 'Blob store is suspended.' });
+    } else if (err instanceof BlobServiceNotAvailable) {
+      res.status(503).json({ error: 'Blob service is temporarily unavailable. Please try again.' });
+    } else if (err instanceof BlobServiceRateLimited) {
+      res.status(429).json({ error: 'Rate limited. Please try again later.' });
+    } else {
+      res.status(500).json({ error: 'Failed to share brew' });
+    }
   }
 }

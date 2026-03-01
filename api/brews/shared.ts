@@ -26,7 +26,9 @@ export default async function handler(req: VReq, res: VRes) {
     const results = await Promise.all(
       blobs.map(async (blob) => {
         try {
-          const fetchRes = await fetch(blob.url);
+          const fetchRes = await fetch(blob.url, {
+            headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+          });
           if (!fetchRes.ok) return null;
           const data = await fetchRes.json() as unknown;
           return data;

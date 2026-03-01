@@ -36,6 +36,10 @@ export default async function handler(req: VReq, res: VRes) {
       res.status(400).json({ error: 'Missing required fields: coffeeProducer, countryOfOrigin, brewingMethod, rating' });
       return;
     }
+    if (typeof rating !== 'number' || rating < 1 || rating > 5) {
+      res.status(400).json({ error: 'Rating must be a number between 1 and 5' });
+      return;
+    }
 
     const shareId = generateShareId();
     const sharedAt = new Date().toISOString();
@@ -70,7 +74,11 @@ export default async function handler(req: VReq, res: VRes) {
 
     // Build the share URL from the request headers
     const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https';
-    const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.headers.host ?? '';
+    const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.headers.host;
+    if (!host) {
+      res.status(500).json({ error: 'Unable to determine server host for share URL' });
+      return;
+    }
     const baseUrl = `${proto}://${host}`;
 
     res.status(201).json({

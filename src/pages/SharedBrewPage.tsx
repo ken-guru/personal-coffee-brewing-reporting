@@ -28,7 +28,11 @@ export function SharedBrewPage() {
           }
           return;
         }
-        const data = await res.json() as SharedBrew;
+        const data = await res.json().catch(() => null) as SharedBrew | null;
+        if (!data) {
+          if (!cancelled) setError('Invalid response from server.');
+          return;
+        }
         if (!cancelled) {
           setSharedBrew(data);
         }

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockedFunction } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as blobModule from '@vercel/blob';
 
@@ -67,9 +67,31 @@ const validBrewBody = {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/brews/share', () => {
+  const originalEnv = process.env.BLOB_READ_WRITE_TOKEN;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.BLOB_READ_WRITE_TOKEN = 'test-token';
     mockPut.mockResolvedValue({ url: 'https://blob.store/brew-test.json', pathname: 'brew-test.json', contentType: 'application/json', contentDisposition: '' } as ReturnType<typeof mockPut> extends Promise<infer T> ? T : never);
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.BLOB_READ_WRITE_TOKEN;
+    } else {
+      process.env.BLOB_READ_WRITE_TOKEN = originalEnv;
+    }
+  });
+
+  it('returns 503 when BLOB_READ_WRITE_TOKEN is not configured', async () => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    const req = makeReq({ body: validBrewBody, headers: { host: 'myapp.vercel.app' } });
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(503);
+    expect(lastBody()).toMatchObject({ error: 'Storage not configured' });
+    // Blob must not be written when token is missing
+    expect(mockPut).not.toHaveBeenCalled();
   });
 
   it('returns 405 for non-POST requests', async () => {

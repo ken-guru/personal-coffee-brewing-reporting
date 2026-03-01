@@ -41,6 +41,11 @@ export default async function handler(req: VReq, res: VRes) {
       return;
     }
 
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      res.status(503).json({ error: 'Storage not configured' });
+      return;
+    }
+
     // Build the share URL from the request headers first, before writing to storage
     const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https';
     const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.headers.host;

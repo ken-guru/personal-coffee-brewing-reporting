@@ -6,9 +6,11 @@ import * as blobModule from '@vercel/blob';
 vi.mock('@vercel/blob', () => ({
   put: vi.fn(),
   list: vi.fn(),
+  get: vi.fn(),
 }));
 
 const mockList = blobModule.list as MockedFunction<typeof blobModule.list>;
+const mockGet = blobModule.get as MockedFunction<typeof blobModule.get>;
 
 const { default: handler } = await import('../shared.js');
 
@@ -42,6 +44,17 @@ const mockBrewBlob = (sharedAt: string, coffeeProducer: string) => ({
   sharedAt,
   brew: { coffeeProducer, countryOfOrigin: 'Ethiopia', brewingMethod: 'pour-over', rating: 4 },
 });
+
+function makeGetResult(data: unknown) {
+  const json = JSON.stringify(data);
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(json));
+      controller.close();
+    },
+  });
+  return { statusCode: 200 as const, stream, headers: new Headers(), blob: {} };
+}
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
@@ -92,10 +105,10 @@ describe('GET /api/brews/shared', () => {
       hasMore: false,
     });
 
-    // Mock fetch for each blob URL
-    globalThis.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(olderBrew) } as unknown as Response)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(newerBrew) } as unknown as Response);
+    // Mock get() for each blob URL
+    mockGet
+      .mockResolvedValueOnce(makeGetResult(olderBrew))
+      .mockResolvedValueOnce(makeGetResult(newerBrew));
 
     const req = makeReq('GET');
     const { res, lastStatus, lastBody } = makeRes();
@@ -121,9 +134,9 @@ describe('GET /api/brews/shared', () => {
       hasMore: false,
     });
 
-    globalThis.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: false } as unknown as Response)
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(goodBrew) } as unknown as Response);
+    mockGet
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeGetResult(goodBrew));
 
     const req = makeReq('GET');
     const { res, lastStatus, lastBody } = makeRes();

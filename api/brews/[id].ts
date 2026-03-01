@@ -1,4 +1,4 @@
-import { list } from '@vercel/blob';
+import { get } from '@vercel/blob';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 type VReq = IncomingMessage & { body?: unknown; query?: Record<string, string | string[]> };
@@ -25,24 +25,16 @@ export default async function handler(req: VReq, res: VRes) {
   }
 
   try {
-    const { blobs } = await list({ prefix: `brew-${id}.json`, limit: 1 });
-    const expectedName = `brew-${id}.json`;
-    const blob = blobs.find((b) => b.pathname === expectedName || b.pathname.endsWith(`/${expectedName}`));
+    const access: 'public' | 'private' = process.env.BLOB_ACCESS === 'public' ? 'public' : 'private';
+    const result = await get(`brew-${id}.json`, { access });
 
-    if (!blob) {
+    if (!result) {
       res.status(404).json({ error: 'Brew not found' });
       return;
     }
 
-    const fetchRes = await fetch(blob.url, {
-      headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-    });
-    if (!fetchRes.ok) {
-      res.status(404).json({ error: 'Brew not found' });
-      return;
-    }
-
-    const data = await fetchRes.json() as unknown;
+    const text = await new Response(result.stream).text();
+    const data = JSON.parse(text) as unknown;
     res.status(200).json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -54,6 +54,7 @@ function makeRes(): {
 }
 
 const validBrewBody = {
+  id: 'e35c4040-697a-4e45-92ea-233c6132cd35',
   coffeeProducer: 'Blue Bottle',
   countryOfOrigin: 'Ethiopia',
   brewingMethod: 'pour-over',
@@ -158,26 +159,50 @@ describe('POST /api/brews/share', () => {
 
     expect(lastStatus()).toBe(201);
     const body = lastBody() as { shareId: string; shareUrl: string; sharedAt: string };
-    expect(body.shareUrl).toMatch(/^https:\/\/myapp\.vercel\.app\/shared\//);
-    expect(body.shareId).toBeTruthy();
+    // The share id must equal the brew's own local id
+    expect(body.shareId).toBe(validBrewBody.id);
+    expect(body.shareUrl).toBe(`https://myapp.vercel.app/shared/${validBrewBody.id}`);
     expect(body.sharedAt).toBeTruthy();
     expect(mockPut).toHaveBeenCalledOnce();
-    // Blob key should start with "brew-"
+    // Blob key uses the brew's own id
     const [blobKey] = mockPut.mock.calls[0];
-    expect(blobKey).toMatch(/^brew-.+\.json$/);
+    expect(blobKey).toBe(`brew-${validBrewBody.id}.json`);
   });
 
-  it('does not include local id or timestamps in the stored payload', async () => {
+  it('falls back to a generated uuid when no id is supplied in the body', async () => {
+    const bodyWithoutId = { ...validBrewBody };
+    delete (bodyWithoutId as Partial<typeof validBrewBody>).id;
+    const req = makeReq({
+      body: bodyWithoutId,
+      headers: { host: 'myapp.vercel.app' },
+    });
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+
+    expect(lastStatus()).toBe(201);
+    const body = lastBody() as { shareId: string };
+    // shareId should be a non-empty string (the generated uuid fallback)
+    expect(typeof body.shareId).toBe('string');
+    expect(body.shareId.length).toBeGreaterThan(0);
+    // Must NOT be the brew's local id since it was absent
+    expect(body.shareId).not.toBe(validBrewBody.id);
+  });
+
+  it('does not include local id or timestamps in the stored brew payload', async () => {
     const req = makeReq({
       body: { ...validBrewBody, id: 'local-id-123', createdAt: '2024-01-01', updatedAt: '2024-01-02' },
       headers: { host: 'myapp.vercel.app' },
     });
-    const { res, lastStatus } = makeRes();
+    const { res, lastStatus, lastBody } = makeRes();
     await handler(req, res as unknown as Parameters<typeof handler>[1]);
     expect(lastStatus()).toBe(201);
 
+    // The brew id IS used as the share id — that is intentional
+    expect((lastBody() as { shareId: string }).shareId).toBe('local-id-123');
+
     const storedJson = mockPut.mock.calls[0][1] as string;
     const stored = JSON.parse(storedJson) as { brew: Record<string, unknown> };
+    // Only the brew data object must not carry PII identifiers
     expect(stored.brew).not.toHaveProperty('id');
     expect(stored.brew).not.toHaveProperty('createdAt');
     expect(stored.brew).not.toHaveProperty('updatedAt');

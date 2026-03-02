@@ -55,7 +55,13 @@ export default async function handler(req: VReq, res: VRes) {
     }
     const baseUrl = `${proto}://${host}`;
 
-    const shareId = generateShareId();
+    // Use the brew's own id as the share id so that /brew/:id and /shared/:id
+    // use the same identifier.  Fall back to a generated uuid only when the
+    // client does not supply one (e.g. direct API calls).
+    const shareId: string =
+      typeof body.id === 'string' && body.id.trim() !== ''
+        ? body.id.trim()
+        : generateShareId();
     const sharedAt = new Date().toISOString();
 
     // Store only anonymous brew data — exclude the user's local id and timestamps
@@ -91,7 +97,7 @@ export default async function handler(req: VReq, res: VRes) {
       access,
       contentType: 'application/json',
       addRandomSuffix: false,
-      allowOverwrite: false,
+      allowOverwrite: true,  // resharing the same brew updates the stored blob
     });
 
     res.status(201).json({

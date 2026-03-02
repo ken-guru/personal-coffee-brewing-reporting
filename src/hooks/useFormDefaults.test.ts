@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { useFormDefaults, getMostPopular } from '../hooks/useFormDefaults';
+import { useFormDefaults, getMostPopular, getTopN } from '../hooks/useFormDefaults';
 import { makeEntry } from '../test/fixtures';
 import type { SharedBrew } from '../types/sharedBrew';
 
@@ -33,6 +33,30 @@ describe('getMostPopular', () => {
 
   it('works with numbers', () => {
     expect(getMostPopular([30, 14, 30, 30, 14])).toBe(30);
+  });
+});
+
+describe('getTopN', () => {
+  const OPTIONS = ['a', 'b', 'c', 'd'] as const;
+
+  it('returns the first N options in original order when all have equal frequency', () => {
+    expect(getTopN([], [...OPTIONS], 2)).toEqual(['a', 'b']);
+  });
+
+  it('returns the N most frequent values', () => {
+    const values = ['c', 'c', 'b', 'c', 'a', 'b'];
+    expect(getTopN(values, [...OPTIONS], 2)).toEqual(['c', 'b']);
+  });
+
+  it('returns all options when N >= options.length', () => {
+    expect(getTopN(['a', 'b'], [...OPTIONS], 10)).toEqual([...OPTIONS]);
+  });
+
+  it('preserves original order for ties', () => {
+    // a and b have the same count; 'a' appears first in OPTIONS so it stays first
+    const values = ['a', 'b'];
+    const result = getTopN(values, [...OPTIONS], 2);
+    expect(result).toEqual(['a', 'b']);
   });
 });
 

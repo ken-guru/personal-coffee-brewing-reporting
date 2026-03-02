@@ -28,9 +28,9 @@ function fillStep1AndAdvance() {
   fireEvent.click(screen.getByRole('button', { name: /next/i }));
 }
 
-/** On step 2, fill grind equipment and advance to step 3. */
+/** On step 2, select Knock Aergrind and advance to step 3. */
 function fillStep2AndAdvance() {
-  fireEvent.change(screen.getByLabelText(/grind equipment/i), { target: { value: 'Knock Aergrind' } });
+  fireEvent.click(screen.getByRole('button', { name: /knock aergrind/i }));
   fireEvent.click(screen.getByRole('button', { name: /next/i }));
 }
 
@@ -239,5 +239,137 @@ describe('BrewingForm wizard', () => {
     renderForm({ entry, onSubmit: vi.fn() });
     expect(screen.getByDisplayValue('Stumptown')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Colombia')).toBeInTheDocument();
+  });
+
+  // ── Brewing method collapsed picker ──────────────────────────────────────
+
+  it('shows only 3 brewing method buttons by default', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /brewing method/i }));
+    const group = screen.getByRole('group', { name: /brewing method/i });
+    const buttons = group.querySelectorAll('button');
+    expect(buttons.length).toBe(3);
+  });
+
+  it('reveals all method buttons when "Show more" is clicked', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /brewing method/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show .* more method/i }));
+    const group = screen.getByRole('group', { name: /brewing method/i });
+    expect(group.querySelectorAll('button').length).toBe(11);
+  });
+
+  it('shows "Show fewer methods" after expanding, and collapses on click', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /brewing method/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show .* more method/i }));
+    const collapseBtn = screen.getByRole('button', { name: /show fewer methods/i });
+    expect(collapseBtn).toBeInTheDocument();
+    fireEvent.click(collapseBtn);
+    const group = screen.getByRole('group', { name: /brewing method/i });
+    expect(group.querySelectorAll('button').length).toBe(3);
+  });
+
+  it('shows custom method input when "Other" brewing method is selected', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /brewing method/i }));
+    // Expand to reveal Other, then click it
+    fireEvent.click(screen.getByRole('button', { name: /show .* more method/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^other$/i }));
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/describe your brewing method/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation error if Other is selected without custom method text', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /brewing method/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show .* more method/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^other$/i }));
+    // Also need to click a known grinder to satisfy grindEquipment validation
+    fireEvent.click(screen.getByRole('button', { name: /knock aergrind/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/please describe your brewing method/i)).toBeInTheDocument();
+    });
+  });
+
+  // ── Water source collapsed picker ─────────────────────────────────────────
+
+  it('shows only 2 water source buttons by default', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /water source/i }));
+    const group = screen.getByRole('group', { name: /water source/i });
+    expect(group.querySelectorAll('button').length).toBe(2);
+  });
+
+  it('reveals all water source buttons when "Show more" is clicked', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /water source/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show .* more source/i }));
+    const group = screen.getByRole('group', { name: /water source/i });
+    expect(group.querySelectorAll('button').length).toBe(6);
+  });
+
+  // ── Grind equipment picker ────────────────────────────────────────────────
+
+  it('shows Knock Aergrind and Wilfa Svart as buttons in grind equipment picker', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /grind equipment/i }));
+    expect(screen.getByRole('button', { name: /knock aergrind/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /wilfa svart/i })).toBeInTheDocument();
+  });
+
+  it('shows the Other grinder button in grind equipment picker', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /grind equipment/i }));
+    expect(screen.getByRole('button', { name: /other grinder/i })).toBeInTheDocument();
+  });
+
+  it('reveals custom input when Other grinder button is clicked', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('group', { name: /grind equipment/i }));
+    fireEvent.click(screen.getByRole('button', { name: /other grinder/i }));
+    expect(screen.getByLabelText(/custom grind equipment/i)).toBeInTheDocument();
+  });
+
+  // ── Brew time seconds step ────────────────────────────────────────────────
+
+  it('increments seconds by 15 when Increase seconds is clicked', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
+    // Default seconds is 0; increment once
+    fireEvent.click(screen.getByRole('button', { name: /increase seconds/i }));
+    expect(screen.getByText('15')).toBeInTheDocument();
+  });
+
+  it('decrements seconds by 15 when Decrease seconds is clicked', async () => {
+    renderForm();
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
+    // Default seconds is 0; increment to 30 then decrement once to 15
+    fireEvent.click(screen.getByRole('button', { name: /increase seconds/i }));
+    fireEvent.click(screen.getByRole('button', { name: /increase seconds/i }));
+    fireEvent.click(screen.getByRole('button', { name: /decrease seconds/i }));
+    expect(screen.getByText('15')).toBeInTheDocument();
   });
 });

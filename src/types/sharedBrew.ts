@@ -7,6 +7,7 @@ export interface SharedBrewData {
   grindCoarseness: GrindCoarseness;
   grindEquipment: string;
   brewingMethod: BrewingMethod;
+  brewingMethodCustom?: string;
   gramsOfCoffee: number;
   millilitersOfWater: number;
   waterSource: WaterSource;

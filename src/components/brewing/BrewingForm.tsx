@@ -40,6 +40,7 @@ const brewSchema = z.object({
   grindCoarseness: z.enum(['extra-fine', 'fine', 'medium-fine', 'medium', 'medium-coarse', 'coarse', 'extra-coarse'] as const),
   grindEquipment: z.string().min(1, 'Grind equipment is required'),
   brewingMethod: z.enum(['pour-over', 'french-press', 'aeropress', 'aeropress-go', 'kalita', 'siemens-drip', 'espresso', 'moka-pot', 'cold-brew', 'drip', 'other'] as const),
+  brewingMethodCustom: z.string().optional(),
   gramsOfCoffee: z.coerce.number().min(1, 'Must be at least 1g').max(1000, 'Max 1000g'),
   millilitersOfWater: z.coerce.number().min(1, 'Must be at least 1ml').max(10000, 'Max 10000ml'),
   waterSource: z.enum(['tap', 'filtered-tap', 'bottled-still', 'bottled-sparkling', 'spring', 'other'] as const),
@@ -117,9 +118,19 @@ const stepSchemas = [
     coffeeProducer: z.string().min(1, 'Coffee producer is required'),
     countryOfOrigin: z.string().min(1, 'Country of origin is required'),
   }),
-  // Step 1 – Method & Grind (enum fields always have a valid default; only equipment can be empty)
+  // Step 1 – Method & Grind (enum fields always have a valid default; only equipment and custom method can be empty)
   z.object({
+    brewingMethod: z.enum(['pour-over', 'french-press', 'aeropress', 'aeropress-go', 'kalita', 'siemens-drip', 'espresso', 'moka-pot', 'cold-brew', 'drip', 'other'] as const),
     grindEquipment: z.string().min(1, 'Grind equipment is required'),
+    brewingMethodCustom: z.string().optional(),
+  }).superRefine((data, ctx) => {
+    if (data.brewingMethod === 'other' && !data.brewingMethodCustom?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please describe your brewing method',
+        path: ['brewingMethodCustom'],
+      });
+    }
   }),
   // Step 2 – Brew parameters (enum + numeric fields with valid defaults; verify numbers)
   z.object({
@@ -190,27 +201,60 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1" role="alert">{message}</p>;
 }
 
-function MethodPicker({ value, onChange }: { value: BrewingMethod; onChange: (v: BrewingMethod) => void }) {
+function MethodPicker({
+  value,
+  onChange,
+  popularMethods,
+}: {
+  value: BrewingMethod;
+  onChange: (v: BrewingMethod) => void;
+  popularMethods: BrewingMethod[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleOptions = expanded
+    ? methodOptions
+    : methodOptions.filter(({ value: m }) => popularMethods.includes(m) || m === value);
+  const hiddenCount = methodOptions.length - visibleOptions.length;
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2" role="group" aria-label="Brewing method">
-      {methodOptions.map(({ value: method, label, Icon }) => (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2" role="group" aria-label="Brewing method">
+        {visibleOptions.map(({ value: method, label, Icon }) => (
+          <button
+            key={method}
+            type="button"
+            onClick={() => onChange(method)}
+            aria-pressed={value === method}
+            aria-label={label}
+            className={cn(
+              'flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              value === method
+                ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-accent',
+            )}
+          >
+            <Icon className="h-10 w-10" />
+            <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
+          </button>
+        ))}
+      </div>
+      {!expanded && hiddenCount > 0 && (
         <button
-          key={method}
           type="button"
-          onClick={() => onChange(method)}
-          aria-pressed={value === method}
-          aria-label={label}
-          className={cn(
-            'flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            value === method
-              ? 'border-primary bg-primary/10 text-primary shadow-sm'
-              : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-accent',
-          )}
+          onClick={() => setExpanded(true)}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
         >
-          <Icon className="h-10 w-10" />
-          <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
+          Show {hiddenCount} more method{hiddenCount !== 1 ? 's' : ''}
         </button>
-      ))}
+      )}
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+        >
+          Show fewer methods
+        </button>
+      )}
     </div>
   );
 }
@@ -249,27 +293,147 @@ function GrindPicker({ value, onChange }: { value: GrindCoarseness; onChange: (v
   );
 }
 
-function WaterPicker({ value, onChange }: { value: WaterSource; onChange: (v: WaterSource) => void }) {
+function WaterPicker({
+  value,
+  onChange,
+  popularSources,
+}: {
+  value: WaterSource;
+  onChange: (v: WaterSource) => void;
+  popularSources: WaterSource[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleOptions = expanded
+    ? waterOptions
+    : waterOptions.filter(({ value: s }) => popularSources.includes(s) || s === value);
+  const hiddenCount = waterOptions.length - visibleOptions.length;
   return (
-    <div className="grid grid-cols-3 gap-2" role="group" aria-label="Water source">
-      {waterOptions.map(({ value: source, label, Icon }) => (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Water source">
+        {visibleOptions.map(({ value: source, label, Icon }) => (
+          <button
+            key={source}
+            type="button"
+            onClick={() => onChange(source)}
+            aria-pressed={value === source}
+            aria-label={label}
+            className={cn(
+              'flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              value === source
+                ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-accent',
+            )}
+          >
+            <Icon className="h-9 w-9" />
+            <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
+          </button>
+        ))}
+      </div>
+      {!expanded && hiddenCount > 0 && (
         <button
-          key={source}
           type="button"
-          onClick={() => onChange(source)}
-          aria-pressed={value === source}
-          aria-label={label}
+          onClick={() => setExpanded(true)}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+        >
+          Show {hiddenCount} more source{hiddenCount !== 1 ? 's' : ''}
+        </button>
+      )}
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+        >
+          Show fewer sources
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The two pre-defined grinders shown as quick-select buttons
+const KNOWN_GRIND_EQUIPMENTS = ['Knock Aergrind', 'Wilfa Svart'];
+
+function GrindEquipmentPicker({
+  value,
+  onChange,
+  customSuggestions,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  customSuggestions: string[];
+  error?: string;
+}) {
+  const isKnown = KNOWN_GRIND_EQUIPMENTS.includes(value);
+  // Show custom input only when the value is a non-empty string not in the known list
+  const [showCustom, setShowCustom] = useState(!isKnown && value !== '');
+
+  const handleKnownClick = (opt: string) => {
+    onChange(opt);
+    setShowCustom(false);
+  };
+
+  const handleOtherClick = () => {
+    if (isKnown) onChange('');
+    setShowCustom(true);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Grind equipment">
+        {KNOWN_GRIND_EQUIPMENTS.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => handleKnownClick(opt)}
+            aria-pressed={value === opt}
+            aria-label={opt}
+            className={cn(
+              'flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 text-[11px] font-medium leading-tight text-center transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              value === opt
+                ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-accent',
+            )}
+          >
+            {opt}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={handleOtherClick}
+          aria-pressed={showCustom}
+          aria-label="Other grinder"
           className={cn(
-            'flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            value === source
+            'flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 text-[11px] font-medium leading-tight text-center transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            showCustom
               ? 'border-primary bg-primary/10 text-primary shadow-sm'
               : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-accent',
           )}
         >
-          <Icon className="h-9 w-9" />
-          <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
+          Other
         </button>
-      ))}
+      </div>
+      {showCustom && (
+        <div>
+          <Input
+            id="grindEquipment"
+            placeholder="e.g. Baratza Encore, Comandante"
+            list="grind-equipment-suggestions"
+            value={isKnown ? '' : value}
+            onChange={(e) => onChange(e.target.value)}
+            aria-invalid={!!error}
+            aria-label="Custom grind equipment"
+            className="text-base"
+          />
+          <datalist id="grind-equipment-suggestions">
+            {customSuggestions.filter((s) => !KNOWN_GRIND_EQUIPMENTS.includes(s)).map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+      )}
+      {!!error && <p className="text-xs text-destructive mt-1" role="alert">{error}</p>}
     </div>
   );
 }
@@ -342,9 +506,9 @@ function BrewTimePicker({
       </div>
       <span className="text-4xl font-bold text-muted-foreground pb-6">:</span>
       <div className="flex flex-col items-center gap-2">
-        <button type="button" className={spinBtn} onClick={() => onSecondsChange(Math.min(59, seconds + 1))} aria-label="Increase seconds">+</button>
+        <button type="button" className={spinBtn} onClick={() => onSecondsChange(Math.min(45, seconds + 15))} aria-label="Increase seconds">+</button>
         <span className="text-4xl font-bold w-14 text-center tabular-nums text-foreground">{String(seconds).padStart(2, '0')}</span>
-        <button type="button" className={spinBtn} onClick={() => onSecondsChange(Math.max(0, seconds - 1))} aria-label="Decrease seconds">−</button>
+        <button type="button" className={spinBtn} onClick={() => onSecondsChange(Math.max(0, seconds - 15))} aria-label="Decrease seconds">−</button>
         <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">sec</span>
       </div>
     </div>
@@ -360,41 +524,43 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
   const isFirstRender = useRef(true);
   const sharedDefaultsApplied = useRef(false);
 
-  const { suggestions, defaults: formDefaults, loading: defaultsLoading, hasLocalData } = useFormDefaults();
+  const { suggestions, defaults: formDefaults, popularBrewingMethods, popularWaterSources, loading: defaultsLoading, hasLocalData } = useFormDefaults();
 
   const defaultValues: BrewFormValues = entry
     ? {
-        coffeeProducer:     entry.coffeeProducer,
-        countryOfOrigin:    entry.countryOfOrigin,
-        coffeeVariety:      entry.coffeeVariety ?? '',
-        grindCoarseness:    entry.grindCoarseness,
-        grindEquipment:     entry.grindEquipment,
-        brewingMethod:      entry.brewingMethod,
-        gramsOfCoffee:      entry.gramsOfCoffee,
-        millilitersOfWater: entry.millilitersOfWater,
-        waterSource:        entry.waterSource,
-        numberOfPeople:     entry.numberOfPeople,
-        brewMinutes:        Math.floor(entry.brewTimeSeconds / 60),
-        brewSeconds:        entry.brewTimeSeconds % 60,
-        rating:             entry.rating,
-        comment:            entry.comment ?? '',
-        guestRatings:       entry.guestRatings,
+        coffeeProducer:       entry.coffeeProducer,
+        countryOfOrigin:      entry.countryOfOrigin,
+        coffeeVariety:        entry.coffeeVariety ?? '',
+        grindCoarseness:      entry.grindCoarseness,
+        grindEquipment:       entry.grindEquipment,
+        brewingMethod:        entry.brewingMethod,
+        brewingMethodCustom:  entry.brewingMethodCustom ?? '',
+        gramsOfCoffee:        entry.gramsOfCoffee,
+        millilitersOfWater:   entry.millilitersOfWater,
+        waterSource:          entry.waterSource,
+        numberOfPeople:       entry.numberOfPeople,
+        brewMinutes:          Math.floor(entry.brewTimeSeconds / 60),
+        brewSeconds:          entry.brewTimeSeconds % 60,
+        rating:               entry.rating,
+        comment:              entry.comment ?? '',
+        guestRatings:         entry.guestRatings,
       }
     : {
-        coffeeProducer:     formDefaults.coffeeProducer,
-        countryOfOrigin:    formDefaults.countryOfOrigin,
-        coffeeVariety:      formDefaults.coffeeVariety,
-        grindCoarseness:    formDefaults.grindCoarseness,
-        grindEquipment:     formDefaults.grindEquipment,
-        brewingMethod:      formDefaults.brewingMethod,
-        gramsOfCoffee:      formDefaults.gramsOfCoffee,
-        millilitersOfWater: formDefaults.millilitersOfWater,
-        waterSource:        formDefaults.waterSource,
-        numberOfPeople:     formDefaults.numberOfPeople,
-        brewMinutes:        formDefaults.brewMinutes,
-        brewSeconds:        formDefaults.brewSeconds,
-        rating:             0,
-        comment:            '',
+        coffeeProducer:       formDefaults.coffeeProducer,
+        countryOfOrigin:      formDefaults.countryOfOrigin,
+        coffeeVariety:        formDefaults.coffeeVariety,
+        grindCoarseness:      formDefaults.grindCoarseness,
+        grindEquipment:       formDefaults.grindEquipment,
+        brewingMethod:        formDefaults.brewingMethod,
+        brewingMethodCustom:  '',
+        gramsOfCoffee:        formDefaults.gramsOfCoffee,
+        millilitersOfWater:   formDefaults.millilitersOfWater,
+        waterSource:          formDefaults.waterSource,
+        numberOfPeople:       formDefaults.numberOfPeople,
+        brewMinutes:          formDefaults.brewMinutes,
+        brewSeconds:          formDefaults.brewSeconds,
+        rating:               0,
+        comment:              '',
         guestRatings:       [],
       };
 
@@ -426,21 +592,22 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
     if (alreadyHasData || notReadyOrUsed) return;
     sharedDefaultsApplied.current = true;
     reset({
-      coffeeProducer:     formDefaults.coffeeProducer,
-      countryOfOrigin:    formDefaults.countryOfOrigin,
-      coffeeVariety:      formDefaults.coffeeVariety,
-      grindCoarseness:    formDefaults.grindCoarseness,
-      grindEquipment:     formDefaults.grindEquipment,
-      brewingMethod:      formDefaults.brewingMethod,
-      gramsOfCoffee:      formDefaults.gramsOfCoffee,
-      millilitersOfWater: formDefaults.millilitersOfWater,
-      waterSource:        formDefaults.waterSource,
-      numberOfPeople:     formDefaults.numberOfPeople,
-      brewMinutes:        formDefaults.brewMinutes,
-      brewSeconds:        formDefaults.brewSeconds,
-      rating:             0,
-      comment:            '',
-      guestRatings:       [],
+      coffeeProducer:      formDefaults.coffeeProducer,
+      countryOfOrigin:     formDefaults.countryOfOrigin,
+      coffeeVariety:       formDefaults.coffeeVariety,
+      grindCoarseness:     formDefaults.grindCoarseness,
+      grindEquipment:      formDefaults.grindEquipment,
+      brewingMethod:       formDefaults.brewingMethod,
+      brewingMethodCustom: '',
+      gramsOfCoffee:       formDefaults.gramsOfCoffee,
+      millilitersOfWater:  formDefaults.millilitersOfWater,
+      waterSource:         formDefaults.waterSource,
+      numberOfPeople:      formDefaults.numberOfPeople,
+      brewMinutes:         formDefaults.brewMinutes,
+      brewSeconds:         formDefaults.brewSeconds,
+      rating:              0,
+      comment:             '',
+      guestRatings:        [],
     });
   }, [entry, hasLocalData, defaultsLoading, isDirty, formDefaults, reset]);
 
@@ -550,9 +717,25 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
               control={control}
               name="brewingMethod"
               render={({ field }) => (
-                <MethodPicker value={field.value} onChange={field.onChange} />
+                <MethodPicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  popularMethods={popularBrewingMethods}
+                />
               )}
             />
+            {brewingMethod === 'other' && (
+              <div className="mt-2">
+                <Input
+                  id="brewingMethodCustom"
+                  placeholder="Describe your brewing method…"
+                  {...register('brewingMethodCustom')}
+                  aria-invalid={!!errors.brewingMethodCustom}
+                  className="text-base"
+                />
+                <FieldError message={errors.brewingMethodCustom?.message} />
+              </div>
+            )}
             <FieldError message={errors.brewingMethod?.message} />
           </div>
 
@@ -569,21 +752,21 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="grindEquipment">
+            <Label>
               Grind Equipment <span className="text-destructive" aria-hidden="true">*</span>
             </Label>
-            <Input
-              id="grindEquipment"
-              placeholder="e.g. Baratza Encore, Hario"
-              list="grind-equipment-suggestions"
-              {...register('grindEquipment')}
-              aria-invalid={!!errors.grindEquipment}
-              className="text-base"
+            <Controller
+              control={control}
+              name="grindEquipment"
+              render={({ field }) => (
+                <GrindEquipmentPicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  customSuggestions={suggestions.grindEquipments}
+                  error={errors.grindEquipment?.message}
+                />
+              )}
             />
-            <datalist id="grind-equipment-suggestions">
-              {suggestions.grindEquipments.map((s) => <option key={s} value={s} />)}
-            </datalist>
-            <FieldError message={errors.grindEquipment?.message} />
           </div>
         </div>
       )}
@@ -599,7 +782,11 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
               control={control}
               name="waterSource"
               render={({ field }) => (
-                <WaterPicker value={field.value} onChange={field.onChange} />
+                <WaterPicker
+                  value={field.value}
+                  onChange={field.onChange}
+                  popularSources={popularWaterSources}
+                />
               )}
             />
             <FieldError message={errors.waterSource?.message} />

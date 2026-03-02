@@ -22,6 +22,7 @@ export function AddBrewPage() {
       grindCoarseness: data.grindCoarseness,
       grindEquipment: data.grindEquipment,
       brewingMethod: data.brewingMethod,
+      brewingMethodCustom: data.brewingMethodCustom || undefined,
       gramsOfCoffee: data.gramsOfCoffee,
       millilitersOfWater: data.millilitersOfWater,
       waterSource: data.waterSource,

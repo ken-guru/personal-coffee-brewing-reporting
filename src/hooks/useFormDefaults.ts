@@ -21,6 +21,15 @@ const STATIC_COFFEE_VARIETIES = [
 
 const STATIC_GRIND_EQUIPMENTS = ['Knock Aergrind', 'Wilfa Svart'];
 
+const ALL_BREWING_METHODS: BrewingMethod[] = [
+  'pour-over', 'french-press', 'aeropress', 'aeropress-go', 'kalita',
+  'siemens-drip', 'espresso', 'moka-pot', 'cold-brew', 'drip', 'other',
+];
+
+const ALL_WATER_SOURCES: WaterSource[] = [
+  'tap', 'filtered-tap', 'bottled-still', 'bottled-sparkling', 'spring', 'other',
+];
+
 /** Returns the most frequently occurring value in an array, or undefined if empty. */
 export function getMostPopular<T>(values: (T | undefined | null)[]): T | undefined {
   const filtered = values.filter((v): v is T => v !== undefined && v !== null && String(v) !== '');
@@ -32,6 +41,24 @@ export function getMostPopular<T>(values: (T | undefined | null)[]): T | undefin
   }
   const topKey = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
   return filtered.find((v) => JSON.stringify(v) === topKey);
+}
+
+/**
+ * Sorts `allOptions` by frequency in `values` (descending) and returns the top N.
+ * When frequency is tied (e.g., no data), the original order of `allOptions` is preserved.
+ */
+export function getTopN<T>(values: (T | undefined | null)[], allOptions: T[], n: number): T[] {
+  const counts = new Map<string, number>();
+  for (const v of values) {
+    if (v !== undefined && v !== null) {
+      const key = JSON.stringify(v);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  const sorted = [...allOptions].sort(
+    (a, b) => (counts.get(JSON.stringify(b)) ?? 0) - (counts.get(JSON.stringify(a)) ?? 0),
+  );
+  return sorted.slice(0, n);
 }
 
 function unique(arr: string[]): string[] {
@@ -61,7 +88,8 @@ export interface FormDefaults {
 }
 
 /**
- * Computes autocomplete suggestions and smart default values for the brew form.
+ * Computes autocomplete suggestions, smart default values, and popularity rankings
+ * for the brew form.
  *
  * Priority for defaults:
  * 1. Most recent entry in localStorage
@@ -107,6 +135,22 @@ export function useFormDefaults() {
         ...STATIC_GRIND_EQUIPMENTS,
       ]),
     };
+  }, [localEntries, sharedBrews]);
+
+  const popularBrewingMethods = useMemo<BrewingMethod[]>(() => {
+    const allValues = [
+      ...localEntries.map((e) => e.brewingMethod),
+      ...sharedBrews.map((s) => s.brew.brewingMethod),
+    ];
+    return getTopN(allValues, ALL_BREWING_METHODS, 3);
+  }, [localEntries, sharedBrews]);
+
+  const popularWaterSources = useMemo<WaterSource[]>(() => {
+    const allValues = [
+      ...localEntries.map((e) => e.waterSource),
+      ...sharedBrews.map((s) => s.brew.waterSource),
+    ];
+    return getTopN(allValues, ALL_WATER_SOURCES, 2);
   }, [localEntries, sharedBrews]);
 
   const defaults = useMemo<FormDefaults>(() => {
@@ -160,5 +204,5 @@ export function useFormDefaults() {
     };
   }, [latestLocal, sharedBrews]);
 
-  return { suggestions, defaults, loading, hasLocalData };
+  return { suggestions, defaults, popularBrewingMethods, popularWaterSources, loading, hasLocalData };
 }

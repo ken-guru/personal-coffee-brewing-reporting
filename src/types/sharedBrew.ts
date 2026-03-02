@@ -12,7 +12,7 @@ export interface SharedBrewData {
   millilitersOfWater: number;
   waterSource: WaterSource;
   numberOfPeople: number;
-  brewTimeSeconds: number;
+  brewTimeSeconds: number | null; // null means "not applicable" (time is fixed by equipment)
   rating: number;
   comment?: string;
   guestRatings: GuestRating[];

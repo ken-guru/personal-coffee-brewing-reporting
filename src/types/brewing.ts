@@ -49,7 +49,7 @@ export interface BrewingEntry {
   millilitersOfWater: number;
   waterSource: WaterSource;
   numberOfPeople: number;
-  brewTimeSeconds: number;
+  brewTimeSeconds: number | null; // null means "not applicable" (time is fixed by equipment)
   rating: number; // 1-5
   comment?: string;
   guestRatings: GuestRating[];

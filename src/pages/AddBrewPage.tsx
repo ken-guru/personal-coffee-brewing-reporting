@@ -27,7 +27,7 @@ export function AddBrewPage() {
       millilitersOfWater: data.millilitersOfWater,
       waterSource: data.waterSource,
       numberOfPeople: data.numberOfPeople,
-      brewTimeSeconds: data.brewMinutes * 60 + data.brewSeconds,
+      brewTimeSeconds: data.brewTimeNotApplicable ? null : data.brewMinutes * 60 + data.brewSeconds,
       rating: data.rating,
       comment: data.comment,
       guestRatings: data.guestRatings,

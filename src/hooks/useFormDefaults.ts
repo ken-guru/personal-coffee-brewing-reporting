@@ -85,6 +85,7 @@ export interface FormDefaults {
   numberOfPeople: number;
   brewMinutes: number;
   brewSeconds: number;
+  brewTimeNotApplicable: boolean;
 }
 
 /**
@@ -155,9 +156,12 @@ export function useFormDefaults() {
 
   const defaults = useMemo<FormDefaults>(() => {
     const sharedData = sharedBrews.map((s) => s.brew);
-    const brewTime =
-      latestLocal?.brewTimeSeconds ??
-      getMostPopular(sharedData.map((b) => b.brewTimeSeconds));
+    // Determine brew time: use local entry's value (could be null = N/A), or fall through to
+    // the most popular non-null value from shared brews, or undefined (no data → use 3:00 fallback).
+    const localBrewTime = latestLocal ? latestLocal.brewTimeSeconds : undefined;
+    const effectiveBrewTime = localBrewTime !== undefined
+      ? localBrewTime
+      : getMostPopular(sharedData.filter((b) => b.brewTimeSeconds !== null).map((b) => b.brewTimeSeconds as number));
     return {
       coffeeProducer:
         latestLocal?.coffeeProducer ??
@@ -199,8 +203,9 @@ export function useFormDefaults() {
         latestLocal?.numberOfPeople ??
         getMostPopular(sharedData.map((b) => b.numberOfPeople)) ??
         1,
-      brewMinutes: brewTime !== undefined ? Math.floor(brewTime / 60) : 3,
-      brewSeconds: brewTime !== undefined ? brewTime % 60 : 0,
+      brewMinutes: effectiveBrewTime != null ? Math.floor(effectiveBrewTime / 60) : 3,
+      brewSeconds: effectiveBrewTime != null ? effectiveBrewTime % 60 : 0,
+      brewTimeNotApplicable: effectiveBrewTime === null,
     };
   }, [latestLocal, sharedBrews]);
 

@@ -3,11 +3,15 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockedFunction } 
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as blobModule from '@vercel/blob';
 
-vi.mock('@vercel/blob', () => ({
-  put: vi.fn(),
-  list: vi.fn(),
-  get: vi.fn(),
-}));
+vi.mock('@vercel/blob', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@vercel/blob')>();
+  return {
+    ...actual,
+    put: vi.fn(),
+    list: vi.fn(),
+    get: vi.fn(),
+  };
+});
 
 const mockGet = blobModule.get as MockedFunction<typeof blobModule.get>;
 
@@ -136,5 +140,32 @@ describe('GET /api/brews/[id]', () => {
     await handler(req, res as unknown as Parameters<typeof handler>[1]);
     expect(lastStatus()).toBe(500);
     expect((lastBody() as { error: string }).error).toMatch(/Failed to fetch brew/);
+  });
+
+  it('returns 403 when get() throws BlobAccessError', async () => {
+    mockGet.mockRejectedValueOnce(new blobModule.BlobAccessError());
+    const req = makeReq('GET', shareId);
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(403);
+    expect((lastBody() as { error: string }).error).toMatch(/access denied/i);
+  });
+
+  it('returns 503 when get() throws BlobStoreNotFoundError', async () => {
+    mockGet.mockRejectedValueOnce(new blobModule.BlobStoreNotFoundError());
+    const req = makeReq('GET', shareId);
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(503);
+    expect((lastBody() as { error: string }).error).toMatch(/not found/i);
+  });
+
+  it('returns 429 when get() throws BlobServiceRateLimited', async () => {
+    mockGet.mockRejectedValueOnce(new blobModule.BlobServiceRateLimited());
+    const req = makeReq('GET', shareId);
+    const { res, lastStatus, lastBody } = makeRes();
+    await handler(req, res as unknown as Parameters<typeof handler>[1]);
+    expect(lastStatus()).toBe(429);
+    expect((lastBody() as { error: string }).error).toMatch(/rate limited/i);
   });
 });

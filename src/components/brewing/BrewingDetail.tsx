@@ -12,6 +12,7 @@ import { Clock, Droplets, Globe, Coffee, Settings, Users, MessageSquare } from '
 
 interface BrewingDetailProps {
   entry: BrewingEntry;
+  onRate?: (rating: number) => void;
 }
 
 function DetailRow({ label, value, icon }: { label: string; value: string | React.ReactNode; icon?: React.ReactNode }) {
@@ -26,7 +27,7 @@ function DetailRow({ label, value, icon }: { label: string; value: string | Reac
   );
 }
 
-export function BrewingDetail({ entry }: BrewingDetailProps) {
+export function BrewingDetail({ entry, onRate }: BrewingDetailProps) {
   const date = new Date(entry.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
@@ -59,7 +60,14 @@ export function BrewingDetail({ entry }: BrewingDetailProps) {
           )}
         </div>
         <div className="text-right shrink-0">
-          <StarRating value={entry.rating} readOnly size="lg" label="Your rating" />
+          {onRate && entry.rating === 0 ? (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Tap to rate</p>
+              <StarRating value={entry.rating} onChange={onRate} size="lg" label="Rate this brew" />
+            </div>
+          ) : (
+            <StarRating value={entry.rating} readOnly size="lg" label="Your rating" />
+          )}
           <p className="text-xs text-muted-foreground mt-1">{date}</p>
           {updatedDate && (
             <p className="text-xs text-muted-foreground">Updated {updatedDate}</p>

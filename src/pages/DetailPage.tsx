@@ -19,7 +19,7 @@ import {
 export function DetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { entries, removeEntry } = useBrewingEntries();
+  const { entries, removeEntry, editEntry } = useBrewingEntries();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [rateOpen, setRateOpen] = useState(false);
@@ -215,7 +215,10 @@ export function DetailPage() {
           </p>
         )}
 
-        <BrewingDetail entry={entry} />
+        <BrewingDetail
+          entry={entry}
+          onRate={entry.rating === 0 ? (r) => editEntry({ ...entry, rating: r, updatedAt: new Date().toISOString() }) : undefined}
+        />
       </div>
     </Layout>
   );

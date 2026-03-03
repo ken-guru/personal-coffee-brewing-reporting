@@ -142,24 +142,41 @@ const STEPS = ['The Coffee', 'Method & Grind', 'The Brew'];
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function WizardProgress({ currentStep }: { currentStep: number }) {
+function WizardProgress({ currentStep, onStepClick }: { currentStep: number; onStepClick?: (step: number) => void }) {
   return (
     <nav aria-label="Form progress" className="mb-8">
       <ol className="flex items-center">
         {STEPS.map((label, index) => (
           <Fragment key={label}>
             <li className="flex flex-col items-center gap-1 shrink-0">
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200',
-                  index < currentStep  && 'bg-primary text-primary-foreground',
-                  index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
-                  index > currentStep  && 'bg-muted text-muted-foreground',
-                )}
-                aria-current={index === currentStep ? 'step' : undefined}
-              >
-                {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
+              {onStepClick ? (
+                <button
+                  type="button"
+                  onClick={() => onStepClick(index)}
+                  className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    index < currentStep  && 'bg-primary text-primary-foreground hover:bg-primary/80',
+                    index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
+                    index > currentStep  && 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )}
+                  aria-current={index === currentStep ? 'step' : undefined}
+                  aria-label={`Go to step ${index + 1}: ${label}`}
+                >
+                  {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
+                </button>
+              ) : (
+                <div
+                  className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200',
+                    index < currentStep  && 'bg-primary text-primary-foreground',
+                    index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
+                    index > currentStep  && 'bg-muted text-muted-foreground',
+                  )}
+                  aria-current={index === currentStep ? 'step' : undefined}
+                >
+                  {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
+                </div>
+              )}
               <span className={cn(
                 'text-[10px] font-medium hidden sm:block leading-tight text-center max-w-[56px]',
                 index <= currentStep ? 'text-foreground' : 'text-muted-foreground',
@@ -809,8 +826,16 @@ export function BrewingForm({ entry, initialStep, onSubmit }: BrewingFormProps) 
   const isLastStep = step === STEPS.length - 1;
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} noValidate>
-      <WizardProgress currentStep={step} />
+    <form
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !isLastStep && (e.target as HTMLElement).tagName === 'INPUT') {
+          e.preventDefault();
+        }
+      }}
+      onSubmit={handleSubmit(handleFormSubmit)}
+      noValidate
+    >
+      <WizardProgress currentStep={step} onStepClick={entry ? setStep : undefined} />
 
       {/* ── Step 0: The Coffee ───────────────────────────────────────────── */}
       {step === 0 && (
@@ -1096,7 +1121,10 @@ export function BrewingForm({ entry, initialStep, onSubmit }: BrewingFormProps) 
           {step === 0 ? 'Cancel' : '← Back'}
         </Button>
         {isLastStep ? (
-          <Button type="submit" disabled={isSubmitting} className="flex-1">
+          // type="button" prevents the browser from firing a submit event when React
+          // re-renders this button from "Next →" to the save action during the same click,
+          // which would cause an accidental form submission before the user sees the last step.
+          <Button type="button" disabled={isSubmitting} onClick={() => handleSubmit(handleFormSubmit)()} className="flex-1">
             {isSubmitting ? 'Saving…' : entry ? 'Update Brew' : 'Log Brew'}
           </Button>
         ) : (

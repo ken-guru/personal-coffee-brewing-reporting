@@ -57,6 +57,37 @@ describe('BrewingForm wizard', () => {
     expect(currentStep).toBeInTheDocument();
   });
 
+  it('does not show clickable step indicators in new-brew mode (no entry prop)', () => {
+    renderForm();
+    const nav = screen.getByRole('navigation', { name: /form progress/i });
+    const stepButtons = nav.querySelectorAll('button');
+    expect(stepButtons).toHaveLength(0);
+  });
+
+  it('shows clickable step indicator buttons in edit mode', () => {
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit: vi.fn() });
+    const nav = screen.getByRole('navigation', { name: /form progress/i });
+    const stepButtons = nav.querySelectorAll('button');
+    expect(stepButtons).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /go to step 1: the coffee/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go to step 2: method & grind/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go to step 3: the brew/i })).toBeInTheDocument();
+  });
+
+  it('navigates directly to a step when clicking its indicator in edit mode', async () => {
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit: vi.fn() });
+    // Advance to step 2 first
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    // Click step 1 indicator to go directly back to step 1
+    fireEvent.click(screen.getByRole('button', { name: /go to step 1: the coffee/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /the coffee/i })).toBeInTheDocument();
+    });
+  });
+
   // ── Step 1: The Coffee ────────────────────────────────────────────────────
 
   it('shows "The Coffee" heading and producer/origin fields on step 1', () => {
@@ -260,6 +291,18 @@ describe('BrewingForm wizard', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /update brew/i })).toBeInTheDocument();
     });
+  });
+
+  it('does not submit the form when advancing to the last step in edit mode', async () => {
+    const onSubmit = vi.fn();
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit });
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('button', { name: /update brew/i }));
+    // onSubmit must NOT have been called just by navigating to the last step
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   // ── Edit mode pre-population ──────────────────────────────────────────────

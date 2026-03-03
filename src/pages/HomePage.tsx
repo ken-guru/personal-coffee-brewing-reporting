@@ -146,7 +146,19 @@ export function HomePage() {
           {!sharedLoading && !sharedError && communityBrews.length > 0 && (
             <div className="space-y-3">
               {communityBrews.map((shared) => (
-                <SharedBrewCard key={shared.shareId} shared={shared} />
+                <SharedBrewCard
+                  key={shared.shareId}
+                  shared={shared}
+                  onDuplicate={() => setDuplicateTarget({
+                    ...shared.brew,
+                    coffeeVariety: typeof shared.brew.coffeeVariety === 'string'
+                      ? (shared.brew.coffeeVariety ? [shared.brew.coffeeVariety] : undefined)
+                      : shared.brew.coffeeVariety,
+                    id: shared.shareId,
+                    createdAt: shared.sharedAt,
+                    updatedAt: shared.sharedAt,
+                  })}
+                />
               ))}
             </div>
           )}

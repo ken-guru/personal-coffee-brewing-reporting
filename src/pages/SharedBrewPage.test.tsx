@@ -9,6 +9,7 @@ function renderSharedBrewPage(id: string) {
       <Routes>
         <Route path="/shared/:id" element={<SharedBrewPage />} />
         <Route path="/" element={<div>Home Page</div>} />
+        <Route path="/new" element={<div>Add Brew Page</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -183,5 +184,88 @@ describe('SharedBrewPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/authentication required/i)).toBeInTheDocument();
     });
+  });
+
+  it('shows the Duplicate button after loading', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: mockHeaders(),
+      json: () => Promise.resolve(mockSharedBrew),
+      clone: function () { return this; },
+    } as unknown as Response);
+
+    renderSharedBrewPage('abc-123');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^duplicate$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('opens a duplicate confirmation dialog when Duplicate is clicked', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: mockHeaders(),
+      json: () => Promise.resolve(mockSharedBrew),
+      clone: function () { return this; },
+    } as unknown as Response);
+
+    renderSharedBrewPage('abc-123');
+
+    await waitFor(() => screen.getByRole('button', { name: /^duplicate$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Duplicate Brew')).toBeInTheDocument();
+  });
+
+  it('navigates to /new when duplication is confirmed', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: mockHeaders(),
+      json: () => Promise.resolve(mockSharedBrew),
+      clone: function () { return this; },
+    } as unknown as Response);
+
+    renderSharedBrewPage('abc-123');
+
+    await waitFor(() => screen.getByRole('button', { name: /^duplicate$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    await waitFor(() => screen.getByRole('dialog'));
+
+    const confirmBtn = screen.getAllByRole('button', { name: /duplicate/i }).find(
+      (btn) => btn.closest('[role="dialog"]')
+    );
+    fireEvent.click(confirmBtn!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Brew Page')).toBeInTheDocument();
+    });
+  });
+
+  it('renders coffeeVariety from legacy string field without crashing', async () => {
+    const legacyBrew = {
+      ...mockSharedBrew,
+      brew: { ...mockSharedBrew.brew, coffeeVariety: 'Heirloom' as unknown as string[] },
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: mockHeaders(),
+      json: () => Promise.resolve(legacyBrew),
+      clone: function () { return this; },
+    } as unknown as Response);
+
+    renderSharedBrewPage('abc-123');
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Test Roaster' })).toBeInTheDocument();
+    });
+    // The variety should appear as text (not crash with .join error)
+    expect(screen.getByText('Heirloom')).toBeInTheDocument();
   });
 });

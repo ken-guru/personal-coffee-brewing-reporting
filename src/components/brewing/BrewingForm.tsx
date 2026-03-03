@@ -48,7 +48,7 @@ const brewSchema = z.object({
   brewMinutes: z.coerce.number().min(0).max(60),
   brewSeconds: z.coerce.number().min(0).max(59),
   brewTimeNotApplicable: z.boolean(),
-  rating: z.number().min(1, 'Please select a rating').max(5),
+  rating: z.number().min(0).max(5),
   comment: z.string().optional(),
   guestRatings: z.array(
     z.object({
@@ -148,7 +148,7 @@ const stepSchemas = [
   }),
   // Step 3 – Rating
   z.object({
-    rating: z.number().min(1, 'Please select a rating').max(5),
+    rating: z.number().min(0).max(5),
   }),
 ] as const;
 

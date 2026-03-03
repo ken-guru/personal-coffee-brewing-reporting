@@ -570,4 +570,21 @@ describe('BrewingForm wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: /30 g, click to edit/i }));
     expect(screen.getByLabelText(/edit coffee amount/i)).toBeInTheDocument();
   });
+
+  it('allows submitting without selecting a rating', async () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit });
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    await waitFor(() => screen.getByRole('button', { name: /log brew/i }));
+    // Do NOT click any star — rating stays at 0
+    fireEvent.click(screen.getByRole('button', { name: /log brew/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
+    expect(onSubmit.mock.calls[0][0].rating).toBe(0);
+  });
 });

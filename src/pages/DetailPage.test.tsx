@@ -185,11 +185,11 @@ describe('DetailPage', () => {
     });
   });
 
-  it('shows Rate button instead of Share when brew is unrated', () => {
+  it('does not show Share button when brew is unrated', () => {
     const entry = makeEntry({ id: 'entry-abc', rating: 0 });
     localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
     renderDetailPage('entry-abc');
-    expect(screen.getByRole('button', { name: /^rate$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^rate$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /share/i })).not.toBeInTheDocument();
   });
 
@@ -207,17 +207,6 @@ describe('DetailPage', () => {
     renderDetailPage('entry-abc');
     expect(screen.getByText(/unrated/i)).toBeInTheDocument();
     expect(screen.getByText(/rate it first to unlock sharing/i)).toBeInTheDocument();
-  });
-
-  it('opens the rate modal when Rate button is clicked', async () => {
-    const entry = makeEntry({ id: 'entry-abc', rating: 0 });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    renderDetailPage('entry-abc');
-    fireEvent.click(screen.getByRole('button', { name: /^rate$/i }));
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Rate Brew')).toBeInTheDocument();
   });
 
   it('shows interactive star rating inline when brew is unrated', () => {
@@ -245,7 +234,7 @@ describe('DetailPage', () => {
       const stored = JSON.parse(localStorage.getItem('coffee-brewing-entries') ?? '[]') as { rating: number }[];
       expect(stored[0].rating).toBe(4);
     });
-    // Share button appears after rating, "Rate" button disappears
-    expect(screen.queryByRole('button', { name: /^rate$/i })).not.toBeInTheDocument();
+    // Share button appears after rating
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
   });
 });

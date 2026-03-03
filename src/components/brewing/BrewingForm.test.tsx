@@ -41,13 +41,13 @@ describe('BrewingForm wizard', () => {
 
   // ── Progress indicator ────────────────────────────────────────────────────
 
-  it('renders all 4 step labels in the progress indicator', () => {
+  it('renders all 3 step labels in the progress indicator', () => {
     renderForm();
     const nav = screen.getByRole('navigation', { name: /form progress/i });
     expect(nav).toHaveTextContent('The Coffee');
     expect(nav).toHaveTextContent('Method & Grind');
     expect(nav).toHaveTextContent('The Brew');
-    expect(nav).toHaveTextContent('Rate It');
+    expect(nav).not.toHaveTextContent('Rate It');
   });
 
   it('marks step 1 as the current step initially', () => {
@@ -55,6 +55,37 @@ describe('BrewingForm wizard', () => {
     const stepNav = screen.getByRole('navigation', { name: /form progress/i });
     const currentStep = stepNav.querySelector('[aria-current="step"]');
     expect(currentStep).toBeInTheDocument();
+  });
+
+  it('does not show clickable step indicators in new-brew mode (no entry prop)', () => {
+    renderForm();
+    const nav = screen.getByRole('navigation', { name: /form progress/i });
+    const stepButtons = nav.querySelectorAll('button');
+    expect(stepButtons).toHaveLength(0);
+  });
+
+  it('shows clickable step indicator buttons in edit mode', () => {
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit: vi.fn() });
+    const nav = screen.getByRole('navigation', { name: /form progress/i });
+    const stepButtons = nav.querySelectorAll('button');
+    expect(stepButtons).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /go to step 1: the coffee/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go to step 2: method & grind/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go to step 3: the brew/i })).toBeInTheDocument();
+  });
+
+  it('navigates directly to a step when clicking its indicator in edit mode', async () => {
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit: vi.fn() });
+    // Advance to step 2 first
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    // Click step 1 indicator to go directly back to step 1
+    fireEvent.click(screen.getByRole('button', { name: /go to step 1: the coffee/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /the coffee/i })).toBeInTheDocument();
+    });
   });
 
   // ── Step 1: The Coffee ────────────────────────────────────────────────────
@@ -238,28 +269,13 @@ describe('BrewingForm wizard', () => {
     expect(screen.getByText(/30g coffee · 500ml water/)).toBeInTheDocument();
   });
 
-  // ── Step 4: Rate It ───────────────────────────────────────────────────────
-
-  it('reaches step 4 and shows the star rating on step 4', async () => {
-    renderForm();
-    fillStep1AndAdvance();
-    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
-    fillStep2AndAdvance();
-    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /rate it/i })).toBeInTheDocument();
-    });
-    expect(screen.getByRole('group', { name: /overall rating/i })).toBeInTheDocument();
-  });
+  // ── Step 3: The Brew (last step) ──────────────────────────────────────────
 
   it('shows "Log Brew" submit button on the last step', async () => {
     renderForm();
     fillStep1AndAdvance();
     await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
     fillStep2AndAdvance();
-    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /log brew/i })).toBeInTheDocument();
     });
@@ -272,22 +288,21 @@ describe('BrewingForm wizard', () => {
     fillStep1AndAdvance();
     await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
     fillStep2AndAdvance();
-    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /update brew/i })).toBeInTheDocument();
     });
   });
 
-  it('does not show guest ratings section when numberOfPeople is 1 on step 4', async () => {
-    renderForm();
+  it('does not submit the form when advancing to the last step in edit mode', async () => {
+    const onSubmit = vi.fn();
+    const entry = makeEntry();
+    renderForm({ entry, onSubmit });
     fillStep1AndAdvance();
     await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
     fillStep2AndAdvance();
-    await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    await waitFor(() => screen.getByRole('heading', { name: /rate it/i }));
-    expect(screen.queryByText(/guest ratings/i)).not.toBeInTheDocument();
+    await waitFor(() => screen.getByRole('button', { name: /update brew/i }));
+    // onSubmit must NOT have been called just by navigating to the last step
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   // ── Edit mode pre-population ──────────────────────────────────────────────
@@ -569,5 +584,19 @@ describe('BrewingForm wizard', () => {
     await waitFor(() => screen.getByRole('heading', { name: /the brew/i }));
     fireEvent.click(screen.getByRole('button', { name: /30 g, click to edit/i }));
     expect(screen.getByLabelText(/edit coffee amount/i)).toBeInTheDocument();
+  });
+
+  it('allows submitting without selecting a rating', async () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit });
+    fillStep1AndAdvance();
+    await waitFor(() => screen.getByRole('heading', { name: /method & grind/i }));
+    fillStep2AndAdvance();
+    // The Brew is the last step — Log Brew should now be visible
+    await waitFor(() => screen.getByRole('button', { name: /log brew/i }));
+    fireEvent.click(screen.getByRole('button', { name: /log brew/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledOnce();
+    });
   });
 });

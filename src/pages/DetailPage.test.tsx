@@ -10,6 +10,7 @@ function renderDetailPage(id: string) {
       <Routes>
         <Route path="/brew/:id" element={<DetailPage />} />
         <Route path="/" element={<div>Home Page</div>} />
+        <Route path="/new" element={<div>Add Brew Page</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -149,5 +150,91 @@ describe('DetailPage', () => {
       expect(screen.getByText('Sharing failed')).toBeInTheDocument();
     });
     expect(screen.getByText('Storage not configured')).toBeInTheDocument();
+  });
+
+  it('shows the Duplicate button', () => {
+    const entry = makeEntry({ id: 'entry-abc' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.getByRole('button', { name: /duplicate/i })).toBeInTheDocument();
+  });
+
+  it('opens a duplicate confirmation dialog when Duplicate is clicked', async () => {
+    const entry = makeEntry({ id: 'entry-abc' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Duplicate Brew')).toBeInTheDocument();
+  });
+
+  it('navigates to /new with duplicateFrom state when duplication is confirmed', async () => {
+    const entry = makeEntry({ id: 'entry-abc' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    await waitFor(() => screen.getByRole('dialog'));
+    const confirmBtn = screen.getAllByRole('button', { name: /duplicate/i }).find(
+      (btn) => btn.closest('[role="dialog"]')
+    );
+    fireEvent.click(confirmBtn!);
+    await waitFor(() => {
+      expect(screen.getByText('Add Brew Page')).toBeInTheDocument();
+    });
+  });
+
+  it('does not show Share button when brew is unrated', () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 0 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.queryByRole('button', { name: /^rate$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /share/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Share button (not Rate button) when brew is rated', () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 4 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^rate$/i })).not.toBeInTheDocument();
+  });
+
+  it('shows unrated note when brew has no rating', () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 0 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.getByText(/unrated/i)).toBeInTheDocument();
+    expect(screen.getByText(/rate it first to unlock sharing/i)).toBeInTheDocument();
+  });
+
+  it('shows interactive star rating inline when brew is unrated', () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 0 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.getByText(/tap to rate/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /rate this brew/i })).toBeInTheDocument();
+  });
+
+  it('does not show interactive star rating when brew is already rated', () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 3 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    expect(screen.queryByText(/tap to rate/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /rate this brew/i })).not.toBeInTheDocument();
+  });
+
+  it('saves a rating when a star is clicked inline', async () => {
+    const entry = makeEntry({ id: 'entry-abc', rating: 0 });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderDetailPage('entry-abc');
+    fireEvent.click(screen.getByRole('button', { name: /4 stars/i }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem('coffee-brewing-entries') ?? '[]') as { rating: number }[];
+      expect(stored[0].rating).toBe(4);
+    });
+    // Share button appears after rating
+    expect(screen.getByRole('button', { name: /share/i })).toBeInTheDocument();
   });
 });

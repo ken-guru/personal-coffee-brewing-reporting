@@ -9,8 +9,6 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
 import { Label } from '../ui/Label';
-import { StarRating } from '../ui/StarRating';
-import { GuestRatings } from './GuestRatings';
 import { cn } from '../../lib/utils';
 import { Check, Minus, Plus } from 'lucide-react';
 import {
@@ -48,21 +46,14 @@ const brewSchema = z.object({
   brewMinutes: z.coerce.number().min(0).max(60),
   brewSeconds: z.coerce.number().min(0).max(59),
   brewTimeNotApplicable: z.boolean(),
-  rating: z.number().min(1, 'Please select a rating').max(5),
   comment: z.string().optional(),
-  guestRatings: z.array(
-    z.object({
-      id: z.string(),
-      rating: z.number().min(1).max(5),
-      comment: z.string().optional(),
-    })
-  ),
 });
 
 export type BrewFormValues = z.infer<typeof brewSchema>;
 
 interface BrewingFormProps {
   entry?: BrewingEntry;
+  initialStep?: number;
   onSubmit: (data: BrewFormValues) => void;
 }
 
@@ -145,34 +136,47 @@ const stepSchemas = [
     millilitersOfWater: z.number().min(1, 'Must be at least 1ml').max(10000, 'Max 10000ml'),
     numberOfPeople:     z.number().min(1, 'At least 1 person').max(100, 'Max 100 people'),
   }),
-  // Step 3 – Rating
-  z.object({
-    rating: z.number().min(1, 'Please select a rating').max(5),
-  }),
 ] as const;
 
-const STEPS = ['The Coffee', 'Method & Grind', 'The Brew', 'Rate It'];
+const STEPS = ['The Coffee', 'Method & Grind', 'The Brew'];
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function WizardProgress({ currentStep }: { currentStep: number }) {
+function WizardProgress({ currentStep, onStepClick }: { currentStep: number; onStepClick?: (step: number) => void }) {
   return (
     <nav aria-label="Form progress" className="mb-8">
       <ol className="flex items-center">
         {STEPS.map((label, index) => (
           <Fragment key={label}>
             <li className="flex flex-col items-center gap-1 shrink-0">
-              <div
-                className={cn(
-                  'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200',
-                  index < currentStep  && 'bg-primary text-primary-foreground',
-                  index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
-                  index > currentStep  && 'bg-muted text-muted-foreground',
-                )}
-                aria-current={index === currentStep ? 'step' : undefined}
-              >
-                {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
+              {onStepClick ? (
+                <button
+                  type="button"
+                  onClick={() => onStepClick(index)}
+                  className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    index < currentStep  && 'bg-primary text-primary-foreground hover:bg-primary/80',
+                    index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
+                    index > currentStep  && 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )}
+                  aria-current={index === currentStep ? 'step' : undefined}
+                  aria-label={`Go to step ${index + 1}: ${label}`}
+                >
+                  {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
+                </button>
+              ) : (
+                <div
+                  className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200',
+                    index < currentStep  && 'bg-primary text-primary-foreground',
+                    index === currentStep && 'bg-primary text-primary-foreground ring-4 ring-primary/20',
+                    index > currentStep  && 'bg-muted text-muted-foreground',
+                  )}
+                  aria-current={index === currentStep ? 'step' : undefined}
+                >
+                  {index < currentStep ? <Check className="h-4 w-4" /> : index + 1}
+                </div>
+              )}
               <span className={cn(
                 'text-[10px] font-medium hidden sm:block leading-tight text-center max-w-[56px]',
                 index <= currentStep ? 'text-foreground' : 'text-muted-foreground',
@@ -695,9 +699,9 @@ function BrewTimePicker({
 
 // ── Main form ──────────────────────────────────────────────────────────────────
 
-export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
+export function BrewingForm({ entry, initialStep, onSubmit }: BrewingFormProps) {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep ?? 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [maintainRatio, setMaintainRatio] = useState(true);
   const isFirstRender = useRef(true);
@@ -721,9 +725,7 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
         brewMinutes:            entry.brewTimeSeconds !== null ? Math.floor(entry.brewTimeSeconds / 60) : 0,
         brewSeconds:            entry.brewTimeSeconds !== null ? entry.brewTimeSeconds % 60 : 0,
         brewTimeNotApplicable:  entry.brewTimeSeconds === null,
-        rating:                 entry.rating,
         comment:                entry.comment ?? '',
-        guestRatings:           entry.guestRatings,
       }
     : {
         coffeeProducer:         formDefaults.coffeeProducer,
@@ -740,9 +742,7 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
         brewMinutes:            formDefaults.brewMinutes,
         brewSeconds:            formDefaults.brewSeconds,
         brewTimeNotApplicable:  formDefaults.brewTimeNotApplicable,
-        rating:                 0,
         comment:                '',
-        guestRatings:           [],
       };
 
   const {
@@ -758,7 +758,6 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
   } = useForm<BrewFormValues>({ resolver: zodResolver(brewSchema), defaultValues });
 
   const brewingMethod      = watch('brewingMethod');
-  const numberOfPeople     = watch('numberOfPeople');
   const gramsOfCoffee      = watch('gramsOfCoffee');
   const milliliters        = watch('millilitersOfWater');
   const brewMinutes        = watch('brewMinutes');
@@ -788,9 +787,7 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
       brewMinutes:            formDefaults.brewMinutes,
       brewSeconds:            formDefaults.brewSeconds,
       brewTimeNotApplicable:  formDefaults.brewTimeNotApplicable,
-      rating:                 0,
       comment:                '',
-      guestRatings:           [],
     });
   }, [entry, hasLocalData, defaultsLoading, isDirty, formDefaults, reset]);
 
@@ -829,8 +826,16 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
   const isLastStep = step === STEPS.length - 1;
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} noValidate>
-      <WizardProgress currentStep={step} />
+    <form
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !isLastStep && (e.target as HTMLElement).tagName === 'INPUT') {
+          e.preventDefault();
+        }
+      }}
+      onSubmit={handleSubmit(handleFormSubmit)}
+      noValidate
+    >
+      <WizardProgress currentStep={step} onStepClick={entry ? setStep : undefined} />
 
       {/* ── Step 0: The Coffee ───────────────────────────────────────────── */}
       {step === 0 && (
@@ -1090,29 +1095,6 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
             />
             <FieldError message={errors.numberOfPeople?.message} />
           </div>
-        </div>
-      )}
-
-      {/* ── Step 3: Rate It ──────────────────────────────────────────────── */}
-      {step === 3 && (
-        <div className="space-y-6">
-          <StepHeading emoji="⭐" title="Rate It" subtitle="How was that cup?" />
-
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-center text-foreground">
-              Your Rating <span className="text-destructive" aria-hidden="true">*</span>
-            </p>
-            <div className="flex justify-center">
-              <Controller
-                control={control}
-                name="rating"
-                render={({ field: { value, onChange } }) => (
-                  <StarRating value={value} onChange={onChange} size="lg" label="Overall rating" />
-                )}
-              />
-            </div>
-            <FieldError message={errors.rating?.message} />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="comment">
@@ -1125,19 +1107,6 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
               {...register('comment')}
             />
           </div>
-
-          {/* Guest ratings — only shown when multiple people were served */}
-          {numberOfPeople > 1 && (
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 border-t border-border pt-4">
-                <h3 className="text-base font-semibold text-foreground">Guest Ratings</h3>
-                <span className="text-xs text-muted-foreground">
-                  ({numberOfPeople - 1} guest{numberOfPeople > 2 ? 's' : ''} can rate)
-                </span>
-              </div>
-              <GuestRatings control={control} />
-            </section>
-          )}
         </div>
       )}
 
@@ -1152,7 +1121,10 @@ export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
           {step === 0 ? 'Cancel' : '← Back'}
         </Button>
         {isLastStep ? (
-          <Button type="submit" disabled={isSubmitting} className="flex-1">
+          // type="button" prevents the browser from firing a submit event when React
+          // re-renders this button from "Next →" to the save action during the same click,
+          // which would cause an accidental form submission before the user sees the last step.
+          <Button type="button" disabled={isSubmitting} onClick={() => handleSubmit(handleFormSubmit)()} className="flex-1">
             {isSubmitting ? 'Saving…' : entry ? 'Update Brew' : 'Log Brew'}
           </Button>
         ) : (

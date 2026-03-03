@@ -1,17 +1,27 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, Copy } from 'lucide-react';
 import type { SharedBrew } from '../types/sharedBrew';
 import type { BrewingEntry } from '../types/brewing';
 import { BrewingDetail } from '../components/brewing/BrewingDetail';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog';
 
 export function SharedBrewPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [sharedBrew, setSharedBrew] = useState<SharedBrew | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -91,25 +101,64 @@ export function SharedBrewPage() {
     );
   }
 
-  // Adapt SharedBrew to the BrewingEntry shape expected by BrewingDetail
+  // Adapt SharedBrew to the BrewingEntry shape expected by BrewingDetail.
+  // Normalize coffeeVariety: legacy blobs may have it stored as a plain string.
+  const rawVariety = sharedBrew.brew.coffeeVariety;
+  const normalizedVariety = typeof rawVariety === 'string'
+    ? (rawVariety ? [rawVariety] : undefined)
+    : rawVariety;
   const entry: BrewingEntry = {
     ...sharedBrew.brew,
+    coffeeVariety: normalizedVariety,
     id: sharedBrew.shareId,
     createdAt: sharedBrew.sharedAt,
     updatedAt: sharedBrew.sharedAt,
   };
 
+  const handleDuplicate = () => {
+    navigate('/new', { state: { duplicateFrom: entry } });
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" asChild>
-            <Link to="/" aria-label="Back to home">
-              <ChevronLeft className="h-5 w-5" />
-            </Link>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/" aria-label="Back to home">
+                <ChevronLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <span className="text-sm text-muted-foreground">Shared Brew</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setDuplicateOpen(true)}>
+            <Copy className="h-4 w-4 mr-1" aria-hidden="true" />
+            Duplicate
           </Button>
-          <span className="text-sm text-muted-foreground">Shared Brew</span>
         </div>
+
+        {/* Duplicate confirmation dialog */}
+        <Dialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Duplicate Brew</DialogTitle>
+              <DialogDescription>
+                Duplicate <strong>{entry.coffeeProducer}</strong>? All brew details will be
+                copied and you will be taken to the rating step.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setDuplicateOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDuplicate}>
+                <Copy className="h-4 w-4 mr-1" aria-hidden="true" />
+                Duplicate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <BrewingDetail entry={entry} />
       </div>
     </Layout>

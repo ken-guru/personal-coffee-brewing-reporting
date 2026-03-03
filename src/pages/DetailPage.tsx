@@ -18,8 +18,9 @@ import {
 export function DetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { entries, removeEntry } = useBrewingEntries();
+  const { entries, removeEntry, editEntry } = useBrewingEntries();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -44,6 +45,10 @@ export function DetailPage() {
   const handleDelete = () => {
     removeEntry(entry.id);
     navigate('/');
+  };
+
+  const handleDuplicate = () => {
+    navigate('/new', { state: { duplicateFrom: entry } });
   };
 
   const handleShare = async () => {
@@ -92,9 +97,15 @@ export function DetailPage() {
             </Link>
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleShare} disabled={sharing}>
-              <Share2 className="h-4 w-4 mr-1" aria-hidden="true" />
-              {sharing ? 'Sharing…' : 'Share'}
+            {entry.rating !== 0 && (
+              <Button variant="outline" size="sm" onClick={handleShare} disabled={sharing}>
+                <Share2 className="h-4 w-4 mr-1" aria-hidden="true" />
+                {sharing ? 'Sharing…' : 'Share'}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setDuplicateOpen(true)}>
+              <Copy className="h-4 w-4 mr-1" aria-hidden="true" />
+              Duplicate
             </Button>
             <Button variant="outline" size="sm" asChild>
               <Link to={`/brew/${entry.id}/edit`}>
@@ -130,6 +141,28 @@ export function DetailPage() {
           </div>
         </div>
 
+        {/* Duplicate confirmation dialog */}
+        <Dialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Duplicate Brew</DialogTitle>
+              <DialogDescription>
+                Duplicate <strong>{entry.coffeeProducer}</strong>? All brew details will be
+                copied and you will be taken to the rating step.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setDuplicateOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDuplicate}>
+                <Copy className="h-4 w-4 mr-1" aria-hidden="true" />
+                Duplicate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Share result dialog */}
         <Dialog open={shareOpen} onOpenChange={setShareOpen}>
           <DialogContent>
@@ -161,7 +194,17 @@ export function DetailPage() {
           </DialogContent>
         </Dialog>
 
-        <BrewingDetail entry={entry} />
+        {/* Unrated note */}
+        {entry.rating === 0 && (
+          <p className="text-sm text-muted-foreground bg-muted rounded-lg px-4 py-3">
+            This brew is <strong>unrated</strong>. Rate it first to unlock sharing.
+          </p>
+        )}
+
+        <BrewingDetail
+          entry={entry}
+          onRate={entry.rating === 0 ? (r) => editEntry({ ...entry, rating: r, updatedAt: new Date().toISOString() }) : undefined}
+        />
       </div>
     </Layout>
   );

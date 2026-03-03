@@ -1,15 +1,27 @@
-import { Link } from 'react-router-dom';
-import { Plus, Coffee, TrendingUp, Globe } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus, Coffee, TrendingUp, Globe, Copy } from 'lucide-react';
 import { useBrewingEntries } from '../hooks/useBrewingEntries';
 import { useSharedBrews } from '../hooks/useSharedBrews';
 import { BrewingCard } from '../components/brewing/BrewingCard';
 import { SharedBrewCard } from '../components/brewing/SharedBrewCard';
 import { Button } from '../components/ui/Button';
 import { Layout } from '../components/layout/Layout';
+import { BrewingEntry } from '../types/brewing';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog';
 
 export function HomePage() {
+  const navigate = useNavigate();
   const { entries } = useBrewingEntries();
   const { brews: sharedBrews, loading: sharedLoading, error: sharedError } = useSharedBrews();
+  const [duplicateTarget, setDuplicateTarget] = useState<BrewingEntry | null>(null);
 
   // IDs of local entries that have been shared to the community
   const localEntryIds = new Set(entries.map((e) => e.id));
@@ -29,6 +41,12 @@ export function HomePage() {
     communityBrews.length > 0
       ? (communityBrews.reduce((sum, s) => sum + s.brew.rating, 0) / communityBrews.length).toFixed(1)
       : null;
+
+  const confirmDuplicate = () => {
+    if (!duplicateTarget) return;
+    navigate('/new', { state: { duplicateFrom: duplicateTarget } });
+    setDuplicateTarget(null);
+  };
 
   return (
     <Layout>
@@ -83,7 +101,12 @@ export function HomePage() {
           ) : (
             <div className="space-y-3">
               {entries.map((entry) => (
-                <BrewingCard key={entry.id} entry={entry} isShared={sharedEntryIds.has(entry.id)} />
+                <BrewingCard
+                  key={entry.id}
+                  entry={entry}
+                  isShared={sharedEntryIds.has(entry.id)}
+                  onDuplicate={() => setDuplicateTarget(entry)}
+                />
               ))}
             </div>
           )}
@@ -129,6 +152,28 @@ export function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Duplicate confirmation dialog */}
+      <Dialog open={!!duplicateTarget} onOpenChange={(open) => { if (!open) setDuplicateTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate Brew</DialogTitle>
+            <DialogDescription>
+              Duplicate <strong>{duplicateTarget?.coffeeProducer}</strong>? All brew details will be
+              copied and you will be taken to the rating step.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDuplicateTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDuplicate}>
+              <Copy className="h-4 w-4 mr-1" aria-hidden="true" />
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

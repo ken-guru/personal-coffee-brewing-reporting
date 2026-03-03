@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BrewingCard } from './BrewingCard';
 import { makeEntry } from '../../test/fixtures';
@@ -109,5 +109,32 @@ describe('BrewingCard', () => {
   it('does not show people count for single person', () => {
     renderCard({ numberOfPeople: 1 });
     expect(screen.queryByText(/people/)).not.toBeInTheDocument();
+  });
+
+  it('does not show a duplicate button when onDuplicate is not provided', () => {
+    renderCard();
+    expect(screen.queryByRole('button', { name: /duplicate/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a duplicate button when onDuplicate is provided', () => {
+    const entry = makeEntry({ id: 'abc-123' });
+    render(
+      <MemoryRouter>
+        <BrewingCard entry={entry} onDuplicate={() => {}} />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('button', { name: /duplicate blue bottle brew/i })).toBeInTheDocument();
+  });
+
+  it('calls onDuplicate when the duplicate button is clicked', () => {
+    const onDuplicate = vi.fn();
+    const entry = makeEntry({ id: 'abc-123' });
+    render(
+      <MemoryRouter>
+        <BrewingCard entry={entry} onDuplicate={onDuplicate} />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /duplicate/i }));
+    expect(onDuplicate).toHaveBeenCalledOnce();
   });
 });

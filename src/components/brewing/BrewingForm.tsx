@@ -63,6 +63,7 @@ export type BrewFormValues = z.infer<typeof brewSchema>;
 
 interface BrewingFormProps {
   entry?: BrewingEntry;
+  initialStep?: number;
   onSubmit: (data: BrewFormValues) => void;
 }
 
@@ -695,9 +696,9 @@ function BrewTimePicker({
 
 // ── Main form ──────────────────────────────────────────────────────────────────
 
-export function BrewingForm({ entry, onSubmit }: BrewingFormProps) {
+export function BrewingForm({ entry, initialStep, onSubmit }: BrewingFormProps) {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep ?? 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [maintainRatio, setMaintainRatio] = useState(true);
   const isFirstRender = useRef(true);

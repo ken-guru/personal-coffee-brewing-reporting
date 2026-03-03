@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { HomePage } from '../pages/HomePage';
 import { makeEntry } from '../test/fixtures';
@@ -141,5 +141,35 @@ describe('HomePage', () => {
     mockSharedBrews = [];
     renderHomePage();
     expect(screen.queryByText('Shared')).not.toBeInTheDocument();
+  });
+
+  it('shows a duplicate button on each brew card', () => {
+    const entry = makeEntry({ id: 'a', coffeeProducer: 'Roaster A' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderHomePage();
+    expect(screen.getByRole('button', { name: /duplicate roaster a brew/i })).toBeInTheDocument();
+  });
+
+  it('opens a duplicate confirmation dialog when the duplicate button is clicked', async () => {
+    const entry = makeEntry({ id: 'a', coffeeProducer: 'Roaster A' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderHomePage();
+    fireEvent.click(screen.getByRole('button', { name: /duplicate roaster a brew/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Duplicate Brew')).toBeInTheDocument();
+  });
+
+  it('closes the duplicate dialog when Cancel is clicked', async () => {
+    const entry = makeEntry({ id: 'a', coffeeProducer: 'Roaster A' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    renderHomePage();
+    fireEvent.click(screen.getByRole('button', { name: /duplicate roaster a brew/i }));
+    await waitFor(() => screen.getByRole('dialog'));
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

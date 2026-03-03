@@ -1,14 +1,23 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { BrewingForm, BrewFormValues } from '../components/brewing/BrewingForm';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
 import { useBrewingEntries } from '../hooks/useBrewingEntries';
 import { ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { BrewingEntry } from '../types/brewing';
 
 export function AddBrewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { addEntry } = useBrewingEntries();
+
+  const duplicateFrom = (location.state as { duplicateFrom?: BrewingEntry } | null)?.duplicateFrom;
+
+  // When duplicating, pre-fill all fields except identity, rating and guest ratings.
+  const formEntry: BrewingEntry | undefined = duplicateFrom
+    ? { ...duplicateFrom, id: 'duplicate', createdAt: '', updatedAt: '', rating: 0, guestRatings: [] }
+    : undefined;
 
   const handleSubmit = (data: BrewFormValues) => {
     const now = new Date().toISOString();
@@ -46,7 +55,7 @@ export function AddBrewPage() {
           </Button>
           <h1 className="text-2xl font-bold text-foreground">Log a Brew</h1>
         </div>
-        <BrewingForm onSubmit={handleSubmit} />
+        <BrewingForm entry={formEntry} initialStep={duplicateFrom ? 3 : undefined} onSubmit={handleSubmit} />
       </div>
     </Layout>
   );

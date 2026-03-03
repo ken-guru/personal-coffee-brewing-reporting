@@ -9,6 +9,7 @@ import { RateBrewModal } from '../components/brewing/RateBrewModal';
 import { Button } from '../components/ui/Button';
 import { Layout } from '../components/layout/Layout';
 import { BrewingEntry } from '../types/brewing';
+import { formatBrewingMethod } from '../lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -88,7 +89,7 @@ export function HomePage() {
                   <span className="ml-2 text-xs text-muted-foreground">
                     {entry.brewingMethod === 'other' && entry.brewingMethodCustom
                       ? entry.brewingMethodCustom
-                      : entry.brewingMethod.replace(/-/g, ' ')}
+                      : formatBrewingMethod(entry.brewingMethod)}
                   </span>
                   <span className="ml-2 text-xs text-primary font-medium">Tap to rate →</span>
                 </button>

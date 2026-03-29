@@ -39,7 +39,7 @@ export function HomePage() {
   const [sharedBrewMap, setSharedBrewMap] = useState(() => getSharedBrewMap());
 
   // IDs of local entries that have been shared to the community
-  const localEntryIds = new Set(entries.map((e) => e.id));
+  const localEntryIds = useMemo(() => new Set(entries.map((e) => e.id)), [entries]);
 
   // A local brew is considered "shared" if its ID appears in the persisted map
   // or if its ID happens to match a shareId from the server (legacy fallback).

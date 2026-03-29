@@ -118,12 +118,12 @@ export function BrewingCard({ entry, isShared, onDuplicate, selectionMode, selec
     </Card>
   );
 
-  if (selectionMode) {
+  if (selectionMode && onToggleSelect) {
     return (
       <div className="relative">
         <button
           type="button"
-          onClick={() => onToggleSelect?.(entry.id)}
+          onClick={() => onToggleSelect(entry.id)}
           className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
           aria-label={`${selected ? 'Deselect' : 'Select'} ${entry.coffeeProducer} brew`}
           aria-pressed={selected}

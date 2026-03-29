@@ -26,6 +26,7 @@ export function DetailPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sharedEntryId, setSharedEntryId] = useState<string | null>(null);
 
   const entry = entries.find((e) => e.id === id);
 
@@ -64,7 +65,9 @@ export function DetailPage() {
         const data = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(data.error ?? 'Failed to share brew');
       }
-      const data = await res.json() as { shareUrl: string };
+      const data = await res.json() as { shareUrl: string; shareId: string };
+      // Mark the entry for removal when the dialog closes
+      setSharedEntryId(entry.id);
       setShareUrl(data.shareUrl);
       setShareOpen(true);
     } catch (err) {
@@ -83,6 +86,14 @@ export function DetailPage() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback: select the text
+    }
+  };
+
+  const handleShareDialogClose = () => {
+    setShareOpen(false);
+    if (sharedEntryId && !shareError) {
+      removeEntry(sharedEntryId);
+      navigate('/');
     }
   };
 
@@ -164,7 +175,7 @@ export function DetailPage() {
         </Dialog>
 
         {/* Share result dialog */}
-        <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <Dialog open={shareOpen} onOpenChange={(open) => { if (!open) handleShareDialogClose(); }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{shareError ? 'Sharing failed' : 'Brew shared!'}</DialogTitle>
@@ -189,7 +200,7 @@ export function DetailPage() {
               </div>
             )}
             <DialogFooter>
-              <Button onClick={() => setShareOpen(false)}>Close</Button>
+              <Button onClick={handleShareDialogClose}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

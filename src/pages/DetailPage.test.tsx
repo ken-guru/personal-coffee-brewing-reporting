@@ -133,6 +133,33 @@ describe('DetailPage', () => {
     expect(screen.getByDisplayValue('https://example.com/shared/test-id')).toBeInTheDocument();
   });
 
+  it('removes brew from localStorage and navigates home after closing the share dialog', async () => {
+    const entry = makeEntry({ id: 'entry-abc' });
+    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ shareId: 'test-id', shareUrl: 'https://example.com/shared/test-id', sharedAt: new Date().toISOString() }),
+      clone: function () { return this; },
+    } as unknown as Response);
+
+    renderDetailPage('entry-abc');
+    fireEvent.click(screen.getByRole('button', { name: /share/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    // Entry still in localStorage while dialog is open
+    expect(JSON.parse(localStorage.getItem('coffee-brewing-entries') ?? '[]')).toHaveLength(1);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /close/i })[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Home Page')).toBeInTheDocument();
+    });
+    // Entry removed from localStorage after dialog closes
+    expect(JSON.parse(localStorage.getItem('coffee-brewing-entries') ?? '[]')).toHaveLength(0);
+  });
+
   it('shows an error message in the share dialog when sharing fails', async () => {
     const entry = makeEntry({ id: 'entry-abc' });
     localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));

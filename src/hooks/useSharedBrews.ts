@@ -1,21 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { SharedBrew } from '../types/sharedBrew';
 
 interface UseSharedBrewsResult {
   brews: SharedBrew[];
   loading: boolean;
   error: string | null;
+  refetch: () => void;
 }
 
 export function useSharedBrews(): UseSharedBrewsResult {
   const [brews, setBrews] = useState<SharedBrew[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fetchKey, setFetchKey] = useState(0);
+
+  const refetch = useCallback(() => {
+    setFetchKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchBrews() {
+      setLoading(true);
+      setError(null);
       try {
         const res = await fetch('/api/brews/shared');
         if (!res.ok) {
@@ -40,7 +48,7 @@ export function useSharedBrews(): UseSharedBrewsResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchKey]);
 
-  return { brews, loading, error };
+  return { brews, loading, error, refetch };
 }

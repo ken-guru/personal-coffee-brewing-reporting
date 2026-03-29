@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Coffee, TrendingUp, Globe, Copy, Star } from 'lucide-react';
+import { Plus, Coffee, TrendingUp, Globe, Copy, Star, CheckSquare } from 'lucide-react';
 import { useBrewingEntries } from '../hooks/useBrewingEntries';
 import { useSharedBrews } from '../hooks/useSharedBrews';
 import { BrewingCard } from '../components/brewing/BrewingCard';
 import { SharedBrewCard } from '../components/brewing/SharedBrewCard';
 import { RateBrewModal } from '../components/brewing/RateBrewModal';
+import { MassActionToolbar } from '../components/brewing/MassActionToolbar';
 import { Button } from '../components/ui/Button';
 import { Layout } from '../components/layout/Layout';
 import { BrewingEntry } from '../types/brewing';
@@ -21,19 +22,14 @@ import {
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { entries, editEntry } = useBrewingEntries();
-  const { brews: sharedBrews, loading: sharedLoading, error: sharedError } = useSharedBrews();
+  const { entries, editEntry, removeEntries } = useBrewingEntries();
+  const { brews: sharedBrews, loading: sharedLoading, error: sharedError, refetch: refetchShared } = useSharedBrews();
   const [duplicateTarget, setDuplicateTarget] = useState<BrewingEntry | null>(null);
   const [rateTarget, setRateTarget] = useState<BrewingEntry | null>(null);
-
-  // IDs of local entries that have been shared to the community
-  const localEntryIds = new Set(entries.map((e) => e.id));
-  const sharedEntryIds = new Set(
-    sharedBrews.filter((s) => localEntryIds.has(s.shareId)).map((s) => s.shareId)
-  );
-
-  // Community brews that are NOT duplicates of local entries
-  const communityBrews = sharedBrews.filter((s) => !localEntryIds.has(s.shareId));
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [massSharing, setMassSharing] = useState(false);
+  const [massShareResult, setMassShareResult] = useState<{ success: number; error?: string } | null>(null);
 
   // Unrated brews from today only
   const todayStr = new Date().toDateString();
@@ -49,8 +45,8 @@ export function HomePage() {
       : null;
 
   const communityAvgRating =
-    communityBrews.length > 0
-      ? (communityBrews.reduce((sum, s) => sum + s.brew.rating, 0) / communityBrews.length).toFixed(1)
+    sharedBrews.length > 0
+      ? (sharedBrews.reduce((sum, s) => sum + s.brew.rating, 0) / sharedBrews.length).toFixed(1)
       : null;
 
   const confirmDuplicate = () => {
@@ -58,6 +54,80 @@ export function HomePage() {
     navigate('/new', { state: { duplicateFrom: duplicateTarget } });
     setDuplicateTarget(null);
   };
+
+  // Only rated brews can be shared
+  const shareableEntries = useMemo(
+    () => entries.filter((e) => e.rating !== 0),
+    [entries]
+  );
+
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const shareableIds = useMemo(
+    () => new Set(shareableEntries.map((e) => e.id)),
+    [shareableEntries]
+  );
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === shareableIds.size) return new Set();
+      return new Set(shareableIds);
+    });
+  }, [shareableIds]);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleMassShare = useCallback(async () => {
+    const toShare = entries.filter((e) => selectedIds.has(e.id) && e.rating !== 0);
+    if (toShare.length === 0) return;
+
+    setMassSharing(true);
+    setMassShareResult(null);
+    try {
+      const res = await fetch('/api/brews/share-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(toShare),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? 'Failed to share brews');
+      }
+      const data = await res.json() as { results: Array<{ shareId: string }> };
+
+      // Remove shared brews from local storage — they now live in the community store
+      removeEntries(toShare.map((b) => b.id));
+      // Refresh the community list so the newly shared brews appear there
+      refetchShared();
+
+      setMassShareResult({ success: data.results.length });
+      exitSelectionMode();
+    } catch (err) {
+      setMassShareResult({ success: 0, error: err instanceof Error ? err.message : 'Failed to share brews' });
+    } finally {
+      setMassSharing(false);
+    }
+  }, [entries, selectedIds, exitSelectionMode, removeEntries, refetchShared]);
 
   return (
     <Layout>
@@ -122,13 +192,47 @@ export function HomePage() {
                 </p>
               )}
             </div>
-            <Button asChild>
-              <Link to="/new">
-                <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
-                Log Brew
-              </Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              {shareableEntries.length > 0 && (
+                <Button
+                  variant={selectionMode ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={toggleSelectionMode}
+                  aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+                >
+                  <CheckSquare className="h-4 w-4 mr-1" aria-hidden="true" />
+                  {selectionMode ? 'Cancel' : 'Select'}
+                </Button>
+              )}
+              {!selectionMode && (
+                <Button asChild>
+                  <Link to="/new">
+                    <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
+                    Log Brew
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
+
+          {/* Select all / Deselect all when in selection mode */}
+          {selectionMode && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSelectAll}
+                aria-label={selectedIds.size === shareableEntries.length ? 'Deselect all shareable brews' : 'Select all shareable brews'}
+              >
+                {selectedIds.size === shareableEntries.length ? 'Deselect All' : 'Select All'}
+              </Button>
+              <span className="text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
+                {selectedIds.size > 0
+                  ? `${selectedIds.size} of ${shareableEntries.length} rated brew${shareableEntries.length !== 1 ? 's' : ''} selected`
+                  : `${shareableEntries.length} rated brew${shareableEntries.length !== 1 ? 's' : ''} available`}
+              </span>
+            </div>
+          )}
 
           {/* Entries list */}
           {entries.length === 0 ? (
@@ -152,13 +256,15 @@ export function HomePage() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className={`space-y-3 ${selectionMode ? 'pb-20' : ''}`}>
               {entries.map((entry) => (
                 <BrewingCard
                   key={entry.id}
                   entry={entry}
-                  isShared={sharedEntryIds.has(entry.id)}
-                  onDuplicate={() => setDuplicateTarget(entry)}
+                  onDuplicate={selectionMode ? undefined : () => setDuplicateTarget(entry)}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(entry.id)}
+                  onToggleSelect={entry.rating !== 0 ? toggleSelect : undefined}
                 />
               ))}
             </div>
@@ -172,9 +278,9 @@ export function HomePage() {
             <h2 className="text-xl font-bold text-foreground">Community Brews</h2>
           </div>
 
-          {!sharedLoading && !sharedError && communityBrews.length > 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              {communityBrews.length} session{communityBrews.length !== 1 ? 's' : ''} logged
+              {sharedBrews.length} session{sharedBrews.length !== 1 ? 's' : ''} logged
               {communityAvgRating && (
                 <span className="ml-2 inline-flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" aria-hidden="true" />
@@ -192,13 +298,13 @@ export function HomePage() {
             <p className="text-sm text-muted-foreground">Community brews unavailable.</p>
           )}
 
-          {!sharedLoading && !sharedError && communityBrews.length === 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length === 0 && (
             <p className="text-sm text-muted-foreground">No community brews shared yet. Be the first!</p>
           )}
 
-          {!sharedLoading && !sharedError && communityBrews.length > 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length > 0 && (
             <div className="space-y-3">
-              {communityBrews.map((shared) => (
+              {sharedBrews.map((shared) => (
                 <SharedBrewCard
                   key={shared.shareId}
                   shared={shared}
@@ -249,6 +355,33 @@ export function HomePage() {
           if (rateTarget) editEntry({ ...rateTarget, rating, updatedAt: new Date().toISOString() });
         }}
       />
+
+      {/* Mass action toolbar — slides in from bottom */}
+      {selectionMode && selectedIds.size > 0 && (
+        <MassActionToolbar
+          selectedCount={selectedIds.size}
+          sharing={massSharing}
+          onShare={handleMassShare}
+          onCancel={exitSelectionMode}
+        />
+      )}
+
+      {/* Mass share result dialog */}
+      <Dialog open={!!massShareResult} onOpenChange={(open) => { if (!open) setMassShareResult(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{massShareResult?.error ? 'Sharing failed' : 'Brews shared!'}</DialogTitle>
+            <DialogDescription>
+              {massShareResult?.error
+                ? massShareResult.error
+                : `Successfully shared ${massShareResult?.success} brew${massShareResult?.success !== 1 ? 's' : ''} to the community.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setMassShareResult(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

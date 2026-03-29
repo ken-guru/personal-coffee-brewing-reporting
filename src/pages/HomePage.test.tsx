@@ -29,9 +29,10 @@ function makeSharedBrew(overrides: Partial<SharedBrew> = {}): SharedBrew {
 
 // Default mock: no shared brews
 let mockSharedBrews: SharedBrew[] = [];
+const mockRefetch = vi.fn();
 
 vi.mock('../hooks/useSharedBrews', () => ({
-  useSharedBrews: () => ({ brews: mockSharedBrews, loading: false, error: null }),
+  useSharedBrews: () => ({ brews: mockSharedBrews, loading: false, error: null, refetch: mockRefetch }),
 }));
 
 function renderHomePage() {
@@ -46,6 +47,7 @@ describe('HomePage', () => {
   beforeEach(() => {
     localStorage.clear();
     mockSharedBrews = [];
+    mockRefetch.mockClear();
   });
 
   it('shows the "My Brews" heading', () => {
@@ -114,35 +116,6 @@ describe('HomePage', () => {
     expect(screen.getByText(/avg 3\.0★/)).toBeInTheDocument();
   });
 
-  it('excludes community brews that duplicate a local entry', () => {
-    const entry = makeEntry({ id: 'shared-1', coffeeProducer: 'Local Roaster' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [
-      makeSharedBrew({ shareId: 'shared-1', brew: { ...makeSharedBrew().brew, coffeeProducer: 'Local Roaster' } }),
-    ];
-    renderHomePage();
-    // The producer name appears once (in My Brews), not twice
-    expect(screen.getAllByText('Local Roaster')).toHaveLength(1);
-    // Community section shows no-brews message
-    expect(screen.getByText(/No community brews shared yet/)).toBeInTheDocument();
-  });
-
-  it('shows "Shared" badge on local brews that have been shared', () => {
-    const entry = makeEntry({ id: 'shared-1' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [makeSharedBrew({ shareId: 'shared-1' })];
-    renderHomePage();
-    expect(screen.getByText('Shared')).toBeInTheDocument();
-  });
-
-  it('does not show "Shared" badge on local brews that have not been shared', () => {
-    const entry = makeEntry({ id: 'local-only' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [];
-    renderHomePage();
-    expect(screen.queryByText('Shared')).not.toBeInTheDocument();
-  });
-
   it('shows a duplicate button on each brew card', () => {
     const entry = makeEntry({ id: 'a', coffeeProducer: 'Roaster A' });
     localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
@@ -208,6 +181,100 @@ describe('HomePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save rating/i }));
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: "Rate Today's Brews" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('selection mode', () => {
+    it('shows a Select button when there are rated brews', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      expect(screen.getByRole('button', { name: /enter selection mode/i })).toBeInTheDocument();
+    });
+
+    it('does not show the Select button when there are no rated brews', () => {
+      const entry = makeEntry({ id: 'a', rating: 0, createdAt: '2024-01-01T10:00:00.000Z' });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      expect(screen.queryByRole('button', { name: /enter selection mode/i })).not.toBeInTheDocument();
+    });
+
+    it('enters selection mode when Select button is clicked', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      expect(screen.getByRole('button', { name: /exit selection mode/i })).toBeInTheDocument();
+      expect(screen.getByText('Select All')).toBeInTheDocument();
+    });
+
+    it('exits selection mode when Cancel button is clicked', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      fireEvent.click(screen.getByRole('button', { name: /exit selection mode/i }));
+      expect(screen.getByRole('button', { name: /enter selection mode/i })).toBeInTheDocument();
+    });
+
+    it('shows Select All button in selection mode', () => {
+      const entries = [
+        makeEntry({ id: 'a', rating: 4 }),
+        makeEntry({ id: 'b', rating: 3 }),
+      ];
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify(entries));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      expect(screen.getByRole('button', { name: /select all/i })).toBeInTheDocument();
+    });
+
+    it('selects all rated brews when Select All is clicked', () => {
+      const entries = [
+        makeEntry({ id: 'a', rating: 4 }),
+        makeEntry({ id: 'b', rating: 3 }),
+      ];
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify(entries));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+      expect(screen.getByText(/2 of 2 rated brews selected/)).toBeInTheDocument();
+    });
+
+    it('shows mass action toolbar when brews are selected', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+      expect(screen.getByRole('toolbar', { name: /mass actions/i })).toBeInTheDocument();
+    });
+
+    it('does not show mass action toolbar when no brews are selected', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
+    });
+
+    it('toggles Deselect All after selecting all', () => {
+      const entries = [
+        makeEntry({ id: 'a', rating: 4 }),
+        makeEntry({ id: 'b', rating: 3 }),
+      ];
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify(entries));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      fireEvent.click(screen.getByRole('button', { name: /select all/i }));
+      expect(screen.getByRole('button', { name: /deselect all/i })).toBeInTheDocument();
+    });
+
+    it('hides Log Brew button in selection mode', () => {
+      const entry = makeEntry({ id: 'a', rating: 4 });
+      localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
+      renderHomePage();
+      fireEvent.click(screen.getByRole('button', { name: /enter selection mode/i }));
+      expect(screen.queryByRole('link', { name: /log brew/i })).not.toBeInTheDocument();
     });
   });
 });

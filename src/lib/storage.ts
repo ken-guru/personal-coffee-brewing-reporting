@@ -50,3 +50,9 @@ export function deleteEntry(id: string): void {
   const entries = getEntries().filter((e) => e.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
+
+export function deleteEntries(ids: string[]): void {
+  const idSet = new Set(ids);
+  const entries = getEntries().filter((e) => !idSet.has(e.id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}

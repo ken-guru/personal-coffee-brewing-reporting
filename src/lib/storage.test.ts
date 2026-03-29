@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getEntries, saveEntry, updateEntry, deleteEntry } from '../lib/storage';
+import { getEntries, saveEntry, updateEntry, deleteEntry, deleteEntries } from '../lib/storage';
 import { makeEntry } from '../test/fixtures';
 
 describe('storage', () => {
@@ -81,6 +81,43 @@ describe('storage', () => {
       const entry = makeEntry();
       saveEntry(entry);
       deleteEntry('nonexistent');
+      expect(getEntries()).toHaveLength(1);
+    });
+  });
+
+  describe('deleteEntries', () => {
+    it('removes multiple entries by id', () => {
+      const a = makeEntry({ id: 'a' });
+      const b = makeEntry({ id: 'b' });
+      const c = makeEntry({ id: 'c' });
+      saveEntry(a);
+      saveEntry(b);
+      saveEntry(c);
+      deleteEntries(['a', 'c']);
+      expect(getEntries()).toHaveLength(1);
+      expect(getEntries()[0].id).toBe('b');
+    });
+
+    it('removes all entries when all ids are given', () => {
+      const a = makeEntry({ id: 'a' });
+      const b = makeEntry({ id: 'b' });
+      saveEntry(a);
+      saveEntry(b);
+      deleteEntries(['a', 'b']);
+      expect(getEntries()).toEqual([]);
+    });
+
+    it('ignores ids that do not exist', () => {
+      const a = makeEntry({ id: 'a' });
+      saveEntry(a);
+      deleteEntries(['nonexistent']);
+      expect(getEntries()).toHaveLength(1);
+    });
+
+    it('does nothing with an empty ids array', () => {
+      const a = makeEntry({ id: 'a' });
+      saveEntry(a);
+      deleteEntries([]);
       expect(getEntries()).toHaveLength(1);
     });
   });

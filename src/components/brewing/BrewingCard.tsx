@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock, Users, Droplets, Coffee, Settings, Share2, Copy, Check } from 'lucide-react';
+import { Clock, Users, Droplets, Coffee, Settings, Copy, Check } from 'lucide-react';
 import { BrewingEntry } from '../../types/brewing';
 import { Card, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -9,14 +9,13 @@ import { cn } from '../../lib/utils';
 
 interface BrewingCardProps {
   entry: BrewingEntry;
-  isShared?: boolean;
   onDuplicate?: () => void;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
 }
 
-export function BrewingCard({ entry, isShared, onDuplicate, selectionMode, selected, onToggleSelect }: BrewingCardProps) {
+export function BrewingCard({ entry, onDuplicate, selectionMode, selected, onToggleSelect }: BrewingCardProps) {
   const date = new Date(entry.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -62,12 +61,6 @@ export function BrewingCard({ entry, isShared, onDuplicate, selectionMode, selec
                     {v}
                   </Badge>
                 ))
-              )}
-              {isShared && (
-                <Badge variant="outline" className="text-xs shrink-0 flex items-center gap-1">
-                  <Share2 className="h-3 w-3" aria-hidden="true" />
-                  Shared
-                </Badge>
               )}
             </div>
             <div className="flex items-center gap-1 mt-1">

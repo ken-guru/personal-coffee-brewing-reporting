@@ -29,9 +29,10 @@ function makeSharedBrew(overrides: Partial<SharedBrew> = {}): SharedBrew {
 
 // Default mock: no shared brews
 let mockSharedBrews: SharedBrew[] = [];
+const mockRefetch = vi.fn();
 
 vi.mock('../hooks/useSharedBrews', () => ({
-  useSharedBrews: () => ({ brews: mockSharedBrews, loading: false, error: null }),
+  useSharedBrews: () => ({ brews: mockSharedBrews, loading: false, error: null, refetch: mockRefetch }),
 }));
 
 function renderHomePage() {
@@ -46,6 +47,7 @@ describe('HomePage', () => {
   beforeEach(() => {
     localStorage.clear();
     mockSharedBrews = [];
+    mockRefetch.mockClear();
   });
 
   it('shows the "My Brews" heading', () => {
@@ -112,58 +114,6 @@ describe('HomePage', () => {
     renderHomePage();
     expect(screen.getByText(/2 sessions logged/)).toBeInTheDocument();
     expect(screen.getByText(/avg 3\.0★/)).toBeInTheDocument();
-  });
-
-  it('excludes community brews that duplicate a local entry', () => {
-    const entry = makeEntry({ id: 'shared-1', coffeeProducer: 'Local Roaster' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [
-      makeSharedBrew({ shareId: 'shared-1', brew: { ...makeSharedBrew().brew, coffeeProducer: 'Local Roaster' } }),
-    ];
-    renderHomePage();
-    // The producer name appears once (in My Brews), not twice
-    expect(screen.getAllByText('Local Roaster')).toHaveLength(1);
-    // Community section shows no-brews message
-    expect(screen.getByText(/No community brews shared yet/)).toBeInTheDocument();
-  });
-
-  it('shows "Shared" badge on local brews that have been shared', () => {
-    const entry = makeEntry({ id: 'shared-1' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [makeSharedBrew({ shareId: 'shared-1' })];
-    renderHomePage();
-    expect(screen.getByText('Shared')).toBeInTheDocument();
-  });
-
-  it('shows "Shared" badge via persisted shared brew map', () => {
-    const entry = makeEntry({ id: 'local-123' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    // The share ID is different from the local ID (as it would be in production)
-    localStorage.setItem('coffee-shared-brew-map', JSON.stringify({ 'local-123': 'random-share-uuid' }));
-    mockSharedBrews = [makeSharedBrew({ shareId: 'random-share-uuid' })];
-    renderHomePage();
-    expect(screen.getByText('Shared')).toBeInTheDocument();
-  });
-
-  it('filters shared brews from community list using persisted map', () => {
-    const entry = makeEntry({ id: 'local-456', coffeeProducer: 'My Roaster' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    localStorage.setItem('coffee-shared-brew-map', JSON.stringify({ 'local-456': 'share-uuid-xyz' }));
-    mockSharedBrews = [
-      makeSharedBrew({ shareId: 'share-uuid-xyz', brew: { ...makeSharedBrew().brew, coffeeProducer: 'My Roaster' } }),
-    ];
-    renderHomePage();
-    // The producer name appears once (in My Brews), not in Community
-    expect(screen.getAllByText('My Roaster')).toHaveLength(1);
-    expect(screen.getByText(/No community brews shared yet/)).toBeInTheDocument();
-  });
-
-  it('does not show "Shared" badge on local brews that have not been shared', () => {
-    const entry = makeEntry({ id: 'local-only' });
-    localStorage.setItem('coffee-brewing-entries', JSON.stringify([entry]));
-    mockSharedBrews = [];
-    renderHomePage();
-    expect(screen.queryByText('Shared')).not.toBeInTheDocument();
   });
 
   it('shows a duplicate button on each brew card', () => {

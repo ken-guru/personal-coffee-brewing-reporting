@@ -11,7 +11,6 @@ import { Button } from '../components/ui/Button';
 import { Layout } from '../components/layout/Layout';
 import { BrewingEntry } from '../types/brewing';
 import { formatBrewingMethod } from '../lib/utils';
-import { getSharedBrewMap, markBrewsAsShared } from '../lib/storage';
 import {
   Dialog,
   DialogContent,
@@ -23,54 +22,14 @@ import {
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { entries, editEntry } = useBrewingEntries();
-  const { brews: sharedBrews, loading: sharedLoading, error: sharedError } = useSharedBrews();
+  const { entries, editEntry, removeEntries } = useBrewingEntries();
+  const { brews: sharedBrews, loading: sharedLoading, error: sharedError, refetch: refetchShared } = useSharedBrews();
   const [duplicateTarget, setDuplicateTarget] = useState<BrewingEntry | null>(null);
   const [rateTarget, setRateTarget] = useState<BrewingEntry | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [massSharing, setMassSharing] = useState(false);
   const [massShareResult, setMassShareResult] = useState<{ success: number; error?: string } | null>(null);
-
-  // Track which local brews have been shared using the persisted mapping.
-  // The mapping is updated after each share (single or batch) so that:
-  //  1. The "Shared" badge appears on local brews.
-  //  2. Shared brews are filtered out of the Community Brews list.
-  const [sharedBrewMap, setSharedBrewMap] = useState(() => getSharedBrewMap());
-
-  // IDs of local entries that have been shared to the community
-  const localEntryIds = useMemo(() => new Set(entries.map((e) => e.id)), [entries]);
-
-  // A local brew is considered "shared" if its ID appears in the persisted map
-  // or if its ID happens to match a shareId from the server (legacy fallback).
-  const sharedEntryIds = useMemo(() => {
-    const ids = new Set<string>();
-    // From persisted local→share map
-    for (const localId of Object.keys(sharedBrewMap)) {
-      if (localEntryIds.has(localId)) ids.add(localId);
-    }
-    // Legacy fallback: shareId that directly matches a local entry ID
-    for (const s of sharedBrews) {
-      if (localEntryIds.has(s.shareId)) ids.add(s.shareId);
-    }
-    return ids;
-  }, [sharedBrewMap, sharedBrews, localEntryIds]);
-
-  // Set of share IDs that originated from local brews (used to exclude from community)
-  const ownShareIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const shareId of Object.values(sharedBrewMap)) {
-      ids.add(shareId);
-    }
-    // Legacy fallback
-    for (const s of sharedBrews) {
-      if (localEntryIds.has(s.shareId)) ids.add(s.shareId);
-    }
-    return ids;
-  }, [sharedBrewMap, sharedBrews, localEntryIds]);
-
-  // Community brews that are NOT duplicates of local entries
-  const communityBrews = sharedBrews.filter((s) => !ownShareIds.has(s.shareId));
 
   // Unrated brews from today only
   const todayStr = new Date().toDateString();
@@ -86,8 +45,8 @@ export function HomePage() {
       : null;
 
   const communityAvgRating =
-    communityBrews.length > 0
-      ? (communityBrews.reduce((sum, s) => sum + s.brew.rating, 0) / communityBrews.length).toFixed(1)
+    sharedBrews.length > 0
+      ? (sharedBrews.reduce((sum, s) => sum + s.brew.rating, 0) / sharedBrews.length).toFixed(1)
       : null;
 
   const confirmDuplicate = () => {
@@ -156,14 +115,10 @@ export function HomePage() {
       }
       const data = await res.json() as { results: Array<{ shareId: string }> };
 
-      // Persist local→share ID mappings so the "Shared" badge appears
-      // and these brews are filtered out of Community Brews.
-      const mappings = toShare.map((brew, i) => ({
-        localId: brew.id,
-        shareId: data.results[i].shareId,
-      }));
-      markBrewsAsShared(mappings);
-      setSharedBrewMap(getSharedBrewMap());
+      // Remove shared brews from local storage — they now live in the community store
+      removeEntries(toShare.map((b) => b.id));
+      // Refresh the community list so the newly shared brews appear there
+      refetchShared();
 
       setMassShareResult({ success: data.results.length });
       exitSelectionMode();
@@ -172,7 +127,7 @@ export function HomePage() {
     } finally {
       setMassSharing(false);
     }
-  }, [entries, selectedIds, exitSelectionMode]);
+  }, [entries, selectedIds, exitSelectionMode, removeEntries, refetchShared]);
 
   return (
     <Layout>
@@ -306,7 +261,6 @@ export function HomePage() {
                 <BrewingCard
                   key={entry.id}
                   entry={entry}
-                  isShared={sharedEntryIds.has(entry.id)}
                   onDuplicate={selectionMode ? undefined : () => setDuplicateTarget(entry)}
                   selectionMode={selectionMode}
                   selected={selectedIds.has(entry.id)}
@@ -324,9 +278,9 @@ export function HomePage() {
             <h2 className="text-xl font-bold text-foreground">Community Brews</h2>
           </div>
 
-          {!sharedLoading && !sharedError && communityBrews.length > 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              {communityBrews.length} session{communityBrews.length !== 1 ? 's' : ''} logged
+              {sharedBrews.length} session{sharedBrews.length !== 1 ? 's' : ''} logged
               {communityAvgRating && (
                 <span className="ml-2 inline-flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" aria-hidden="true" />
@@ -344,13 +298,13 @@ export function HomePage() {
             <p className="text-sm text-muted-foreground">Community brews unavailable.</p>
           )}
 
-          {!sharedLoading && !sharedError && communityBrews.length === 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length === 0 && (
             <p className="text-sm text-muted-foreground">No community brews shared yet. Be the first!</p>
           )}
 
-          {!sharedLoading && !sharedError && communityBrews.length > 0 && (
+          {!sharedLoading && !sharedError && sharedBrews.length > 0 && (
             <div className="space-y-3">
-              {communityBrews.map((shared) => (
+              {sharedBrews.map((shared) => (
                 <SharedBrewCard
                   key={shared.shareId}
                   shared={shared}

@@ -5,7 +5,6 @@ import { useBrewingEntries } from '../hooks/useBrewingEntries';
 import { BrewingDetail } from '../components/brewing/BrewingDetail';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
-import { markBrewsAsShared } from '../lib/storage';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +26,7 @@ export function DetailPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sharedEntryId, setSharedEntryId] = useState<string | null>(null);
 
   const entry = entries.find((e) => e.id === id);
 
@@ -66,9 +66,8 @@ export function DetailPage() {
         throw new Error(data.error ?? 'Failed to share brew');
       }
       const data = await res.json() as { shareUrl: string; shareId: string };
-      // Persist the local→share mapping so the brew shows "Shared" on the home page
-      // and is filtered out of Community Brews.
-      markBrewsAsShared([{ localId: entry.id, shareId: data.shareId }]);
+      // Mark the entry for removal when the dialog closes
+      setSharedEntryId(entry.id);
       setShareUrl(data.shareUrl);
       setShareOpen(true);
     } catch (err) {
@@ -168,7 +167,16 @@ export function DetailPage() {
         </Dialog>
 
         {/* Share result dialog */}
-        <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <Dialog open={shareOpen} onOpenChange={(open) => {
+          if (!open) {
+            setShareOpen(false);
+            // Remove the brew from local storage and navigate home — it now lives in the community store
+            if (sharedEntryId && !shareError) {
+              removeEntry(sharedEntryId);
+              navigate('/');
+            }
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{shareError ? 'Sharing failed' : 'Brew shared!'}</DialogTitle>
@@ -193,7 +201,13 @@ export function DetailPage() {
               </div>
             )}
             <DialogFooter>
-              <Button onClick={() => setShareOpen(false)}>Close</Button>
+              <Button onClick={() => {
+                setShareOpen(false);
+                if (sharedEntryId && !shareError) {
+                  removeEntry(sharedEntryId);
+                  navigate('/');
+                }
+              }}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getEntries, saveEntry, updateEntry, deleteEntry, getSharedBrewMap, markBrewsAsShared } from '../lib/storage';
+import { getEntries, saveEntry, updateEntry, deleteEntry, deleteEntries } from '../lib/storage';
 import { makeEntry } from '../test/fixtures';
 
 describe('storage', () => {
@@ -85,46 +85,40 @@ describe('storage', () => {
     });
   });
 
-  describe('getSharedBrewMap', () => {
-    it('returns an empty object when nothing is stored', () => {
-      expect(getSharedBrewMap()).toEqual({});
+  describe('deleteEntries', () => {
+    it('removes multiple entries by id', () => {
+      const a = makeEntry({ id: 'a' });
+      const b = makeEntry({ id: 'b' });
+      const c = makeEntry({ id: 'c' });
+      saveEntry(a);
+      saveEntry(b);
+      saveEntry(c);
+      deleteEntries(['a', 'c']);
+      expect(getEntries()).toHaveLength(1);
+      expect(getEntries()[0].id).toBe('b');
     });
 
-    it('returns an empty object when localStorage contains invalid JSON', () => {
-      localStorage.setItem('coffee-shared-brew-map', 'not-json');
-      expect(getSharedBrewMap()).toEqual({});
+    it('removes all entries when all ids are given', () => {
+      const a = makeEntry({ id: 'a' });
+      const b = makeEntry({ id: 'b' });
+      saveEntry(a);
+      saveEntry(b);
+      deleteEntries(['a', 'b']);
+      expect(getEntries()).toEqual([]);
     });
 
-    it('returns the stored mapping', () => {
-      localStorage.setItem('coffee-shared-brew-map', JSON.stringify({ 'local-1': 'share-1' }));
-      expect(getSharedBrewMap()).toEqual({ 'local-1': 'share-1' });
-    });
-  });
-
-  describe('markBrewsAsShared', () => {
-    it('stores a new mapping', () => {
-      markBrewsAsShared([{ localId: 'a', shareId: 's1' }]);
-      expect(getSharedBrewMap()).toEqual({ a: 's1' });
+    it('ignores ids that do not exist', () => {
+      const a = makeEntry({ id: 'a' });
+      saveEntry(a);
+      deleteEntries(['nonexistent']);
+      expect(getEntries()).toHaveLength(1);
     });
 
-    it('appends to existing mappings', () => {
-      markBrewsAsShared([{ localId: 'a', shareId: 's1' }]);
-      markBrewsAsShared([{ localId: 'b', shareId: 's2' }]);
-      expect(getSharedBrewMap()).toEqual({ a: 's1', b: 's2' });
-    });
-
-    it('overwrites an existing mapping for the same local ID', () => {
-      markBrewsAsShared([{ localId: 'a', shareId: 's1' }]);
-      markBrewsAsShared([{ localId: 'a', shareId: 's2' }]);
-      expect(getSharedBrewMap()).toEqual({ a: 's2' });
-    });
-
-    it('handles multiple mappings in one call', () => {
-      markBrewsAsShared([
-        { localId: 'a', shareId: 's1' },
-        { localId: 'b', shareId: 's2' },
-      ]);
-      expect(getSharedBrewMap()).toEqual({ a: 's1', b: 's2' });
+    it('does nothing with an empty ids array', () => {
+      const a = makeEntry({ id: 'a' });
+      saveEntry(a);
+      deleteEntries([]);
+      expect(getEntries()).toHaveLength(1);
     });
   });
 });

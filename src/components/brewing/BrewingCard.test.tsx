@@ -55,21 +55,6 @@ describe('BrewingCard', () => {
     expect(screen.getByText('Baratza Encore')).toBeInTheDocument();
   });
 
-  it('shows "Shared" badge when isShared is true', () => {
-    const entry = makeEntry();
-    render(
-      <MemoryRouter>
-        <BrewingCard entry={entry} isShared />
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Shared')).toBeInTheDocument();
-  });
-
-  it('does not show "Shared" badge when isShared is false', () => {
-    renderCard();
-    expect(screen.queryByText('Shared')).not.toBeInTheDocument();
-  });
-
   it('shows guest rating count when guests are present', () => {
     renderCard({
       guestRatings: [

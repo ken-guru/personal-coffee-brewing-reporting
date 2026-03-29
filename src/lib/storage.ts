@@ -8,11 +8,6 @@ import { BrewingEntry } from '../types/brewing';
 // to include PII, consider encrypting the payload before storing it here.
 const STORAGE_KEY = 'coffee-brewing-entries';
 
-// Maps local brew IDs to their corresponding remote share IDs.
-// Used to detect which local brews have been shared (for the "Shared" badge)
-// and to filter them out of the Community Brews list.
-const SHARED_MAP_KEY = 'coffee-shared-brew-map';
-
 /** Normalizes entries from older formats (e.g. coffeeVariety as a plain string). */
 function normalizeEntry(raw: Record<string, unknown>): BrewingEntry {
   const entry = raw as unknown as BrewingEntry;
@@ -56,25 +51,8 @@ export function deleteEntry(id: string): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
-// ── Shared-brew mapping ─────────────────────────────────────────────────────
-
-/** Returns the stored mapping of local brew ID → remote share ID. */
-export function getSharedBrewMap(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(SHARED_MAP_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-
-/** Persists local-to-share ID mappings so the UI can show "Shared" badges
- *  and filter the brews from the Community list. */
-export function markBrewsAsShared(mappings: Array<{ localId: string; shareId: string }>): void {
-  const map = getSharedBrewMap();
-  for (const { localId, shareId } of mappings) {
-    map[localId] = shareId;
-  }
-  localStorage.setItem(SHARED_MAP_KEY, JSON.stringify(map));
+export function deleteEntries(ids: string[]): void {
+  const idSet = new Set(ids);
+  const entries = getEntries().filter((e) => !idSet.has(e.id));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }

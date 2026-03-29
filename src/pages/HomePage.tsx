@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Layout } from '../components/layout/Layout';
 import { BrewingEntry } from '../types/brewing';
 import { formatBrewingMethod } from '../lib/utils';
+import { getSharedBrewMap, markBrewsAsShared } from '../lib/storage';
 import {
   Dialog,
   DialogContent,
@@ -31,14 +32,45 @@ export function HomePage() {
   const [massSharing, setMassSharing] = useState(false);
   const [massShareResult, setMassShareResult] = useState<{ success: number; error?: string } | null>(null);
 
+  // Track which local brews have been shared using the persisted mapping.
+  // The mapping is updated after each share (single or batch) so that:
+  //  1. The "Shared" badge appears on local brews.
+  //  2. Shared brews are filtered out of the Community Brews list.
+  const [sharedBrewMap, setSharedBrewMap] = useState(() => getSharedBrewMap());
+
   // IDs of local entries that have been shared to the community
   const localEntryIds = new Set(entries.map((e) => e.id));
-  const sharedEntryIds = new Set(
-    sharedBrews.filter((s) => localEntryIds.has(s.shareId)).map((s) => s.shareId)
-  );
+
+  // A local brew is considered "shared" if its ID appears in the persisted map
+  // or if its ID happens to match a shareId from the server (legacy fallback).
+  const sharedEntryIds = useMemo(() => {
+    const ids = new Set<string>();
+    // From persisted local→share map
+    for (const localId of Object.keys(sharedBrewMap)) {
+      if (localEntryIds.has(localId)) ids.add(localId);
+    }
+    // Legacy fallback: shareId that directly matches a local entry ID
+    for (const s of sharedBrews) {
+      if (localEntryIds.has(s.shareId)) ids.add(s.shareId);
+    }
+    return ids;
+  }, [sharedBrewMap, sharedBrews, localEntryIds]);
+
+  // Set of share IDs that originated from local brews (used to exclude from community)
+  const ownShareIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const shareId of Object.values(sharedBrewMap)) {
+      ids.add(shareId);
+    }
+    // Legacy fallback
+    for (const s of sharedBrews) {
+      if (localEntryIds.has(s.shareId)) ids.add(s.shareId);
+    }
+    return ids;
+  }, [sharedBrewMap, sharedBrews, localEntryIds]);
 
   // Community brews that are NOT duplicates of local entries
-  const communityBrews = sharedBrews.filter((s) => !localEntryIds.has(s.shareId));
+  const communityBrews = sharedBrews.filter((s) => !ownShareIds.has(s.shareId));
 
   // Unrated brews from today only
   const todayStr = new Date().toDateString();
@@ -123,6 +155,16 @@ export function HomePage() {
         throw new Error(data.error ?? 'Failed to share brews');
       }
       const data = await res.json() as { results: Array<{ shareId: string }> };
+
+      // Persist local→share ID mappings so the "Shared" badge appears
+      // and these brews are filtered out of Community Brews.
+      const mappings = toShare.map((brew, i) => ({
+        localId: brew.id,
+        shareId: data.results[i].shareId,
+      }));
+      markBrewsAsShared(mappings);
+      setSharedBrewMap(getSharedBrewMap());
+
       setMassShareResult({ success: data.results.length });
       exitSelectionMode();
     } catch (err) {

@@ -5,6 +5,7 @@ import { useBrewingEntries } from '../hooks/useBrewingEntries';
 import { BrewingDetail } from '../components/brewing/BrewingDetail';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
+import { markBrewsAsShared } from '../lib/storage';
 import {
   Dialog,
   DialogContent,
@@ -64,7 +65,10 @@ export function DetailPage() {
         const data = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(data.error ?? 'Failed to share brew');
       }
-      const data = await res.json() as { shareUrl: string };
+      const data = await res.json() as { shareUrl: string; shareId: string };
+      // Persist the local→share mapping so the brew shows "Shared" on the home page
+      // and is filtered out of Community Brews.
+      markBrewsAsShared([{ localId: entry.id, shareId: data.shareId }]);
       setShareUrl(data.shareUrl);
       setShareOpen(true);
     } catch (err) {
